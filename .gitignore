@@ -256,3 +256,12 @@ com_crashlytics_export_strings.xml
 crashlytics.properties
 crashlytics-build.properties
 fabric.properties
+
+# Ignore the CrowdHuman directory and all its contents
+CrowdHuman/
+CrowdHuman/*
+
+# Ignore other temporary files
+*.log
+*.tmp
+*.odgt

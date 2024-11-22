@@ -39,6 +39,34 @@ def calculate_ratio_score(head_to_body_ratio):
     
     score = max(0, 100 - penalty)  # 최소 0점
     return score
+
+def calculate_vertical_position_score(image_height, face_center_y, feet_y, head_y):
+    score = 100.0
+    penalties = []
+    
+    # 얼굴 중심이 이미지 중앙에서 얼마나 떨어져 있는지 계산
+    image_center_y = image_height / 2
+    face_center_distance = abs(face_center_y - image_center_y)
+    face_center_ratio = face_center_distance / image_height
+    
+    # 발이 이미지 하단에 얼마나 가까운지 계산
+    feet_distance = abs(feet_y - image_height)
+    feet_ratio = feet_distance / image_height
+    
+    # 얼굴 중심점 위치에 따른 감점
+    face_penalty = face_center_ratio * 100  # 중앙에서 멀수록 감점
+    penalties.append(min(face_penalty * 2, 50))  # 최대 50점 감점
+    
+    # 발 위치에 따른 감점
+    feet_penalty = feet_ratio * 100  # 하단에서 멀수록 감점
+    penalties.append(min(feet_penalty * 2, 50))  # 최대 50점 감점
+    
+    # 총 감점 적용
+    total_penalty = sum(penalties)
+    score = max(0, score - total_penalty)
+    
+    return score
+
 def calculate_thirds_score(image_width, image_height, person_center_x):
     # 세로 3등분선 위치 계산
     left_third = image_width / 3
@@ -190,44 +218,37 @@ def run(
                 # Rescale boxes from img_size to im0 size
                 det[:, :4] = scale_boxes(im.shape[2:], det[:, :4], im0.shape).round()
 
-                # Process detections
-                for *xyxy, conf, cls in reversed(det):
-                    if int(cls) == 0:  # if person class
-                        # Calculate body height
-                        body_x1, body_y1, body_x2, body_y2 = [int(x) for x in xyxy]
-                        body_height = body_y2 - body_y1
-
-                        # Calculate person height ratio to image height
-                        image_height = im0.shape[0]
-                        image_width = im0.shape[1]
-                        person_height_ratio = (body_height / image_height) * 100
-
-                        # Process face detections
                 # Process detections 부분 수정
                 for *xyxy, conf, cls in reversed(det):
                     if int(cls) == 0:  # if person class
-                        # Calculate body height and center position
+                        # Calculate body height and positions
                         body_x1, body_y1, body_x2, body_y2 = [int(x) for x in xyxy]
                         body_height = body_y2 - body_y1
                         person_center_x = (body_x1 + body_x2) / 2
-                
+
                         # Calculate person height ratio to image height
                         image_height = im0.shape[0]
                         image_width = im0.shape[1]
                         person_height_ratio = (body_height / image_height) * 100
-                
+
                         # Calculate all scores
                         composition_score, distance = calculate_thirds_score(image_width, image_height, person_center_x)
                         height_ratio_score = calculate_height_ratio_score(person_height_ratio)
-                
+
                         # Process face detections
                         for (x, y, w, h) in faces:
                             face_height = h
                             head_to_body_ratio = body_height / face_height
-                            
-                            # Calculate ratio score
+
+                            # Calculate face center and feet position
+                            face_center_y = y + (h / 2)
+                            feet_y = body_y2  # 발의 y좌표 (person bounding box의 하단)
+                            head_y = body_y1  # 머리의 y좌표 (person bounding box의 상단)
+
+                            # Calculate all scores
                             ratio_score = calculate_ratio_score(head_to_body_ratio)
-                
+                            vertical_score = calculate_vertical_position_score(image_height, face_center_y, feet_y, head_y)
+
                             # Print results
                             print(f"\n전신 세로 길이: {body_height} pixels")
                             print(f"얼굴 세로 길이: {face_height} pixels")
@@ -236,22 +257,25 @@ def run(
                             print(f"전신/이미지 비율: {person_height_ratio:.1f}%")
                             print(f"전신 비율 점수: {height_ratio_score:.1f}")
                             print(f"구도 점수: {composition_score:.1f}")
-                
+                            print(f"수직 위치 점수: {vertical_score:.1f}")
+
                             # Draw face box
                             cv2.rectangle(im0, (x, y), (x + w, y + h), (255, 0, 0), 2)
-                
+
                             # Calculate font scale based on image size
                             font_scale = min(image_width, image_height) * 0.001
                             thickness = max(1, int(min(image_width, image_height) * 0.004))
-                
+
                             # Add ratio text with all scores
-                            ratio_text = f"Ratio: {head_to_body_ratio:.2f}({ratio_score:.1f}) | Height: {person_height_ratio:.1f}%({height_ratio_score:.1f}) | Comp: {composition_score:.1f}"
-                
+                            ratio_text = (f"Ratio: {head_to_body_ratio:.2f}({ratio_score:.1f}) | "
+                                        f"Height: {person_height_ratio:.1f}%({height_ratio_score:.1f}) | "
+                                        f"Comp: {composition_score:.1f} | Vert: {vertical_score:.1f}")
+
                             # 화면 최상단 중앙에 텍스트 배치
                             text_size = cv2.getTextSize(ratio_text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)[0]
                             text_x = im0.shape[1]//2 - text_size[0]//2
                             text_y = text_size[1] + 10
-                
+
                             # 텍스트 추가
                             cv2.putText(im0, ratio_text,
                                       (text_x, text_y),
@@ -259,6 +283,11 @@ def run(
                                       font_scale,
                                       (0, 0, 0),
                                       thickness)
+
+                            # 시각화를 위한 추가 요소 (선택사항)
+                            # 이미지 중앙 수평선 표시
+                            cv2.line(im0, (0, int(image_height/2)), (image_width, int(image_height/2)), 
+                            (128, 128, 128), 1)  # LINE_DASH 옵션 제거
                 
                         if save_txt:  # Write to file
                             xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh

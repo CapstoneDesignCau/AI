@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 import cv2
 import torch
+import numpy as np
 from utils.dataloaders import IMG_FORMATS, VID_FORMATS, LoadImages, LoadScreenshots, LoadStreams
 from utils.general import (LOGGER, Profile, check_file, check_img_size, check_imshow, check_requirements, colorstr,
                          increment_path, non_max_suppression, print_args, scale_boxes, strip_optimizer, xyxy2xywh)
@@ -110,6 +111,53 @@ def calculate_height_ratio_score(person_height_ratio):
     
     score = max(0, 100 - penalty)  # 최소 0점
     return score
+
+def analyze_focus_difference(image, person_bbox, face_bbox):
+    def get_blur_score(roi):
+        gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+        return cv2.Laplacian(gray, cv2.CV_64F).var()
+
+    body_x1, body_y1, body_x2, body_y2 = person_bbox
+    face_x, face_y, face_w, face_h = face_bbox
+    
+    # 얼굴 영역의 선명도 측정
+    face_roi = image[face_y:face_y+face_h, face_x:face_x+face_w]
+    face_sharpness = get_blur_score(face_roi)
+    
+    # 배경 영역 마스크 생성 (인물 영역을 제외한 부분)
+    mask = np.ones(image.shape[:2], dtype=np.uint8) * 255
+    mask[body_y1:body_y2, body_x1:body_x2] = 0
+    
+    # 배경 영역의 선명도 측정
+    background = cv2.bitwise_and(image, image, mask=mask)
+    background_sharpness = get_blur_score(background)
+    
+    # 선명도 차이 계산
+    sharpness_diff = face_sharpness - background_sharpness
+    
+    # 점수 계산 (0-100 범위로 정규화)
+    max_diff = 1000  # 이 값은 테스트를 통해 조정 필요
+    score = min(100, max(0, (sharpness_diff / max_diff) * 100))
+    
+    # 상태 분석 및 코멘트 생성
+    if score < 30:  # 아웃포커싱이 거의 없는 경우
+        status = "no_focus"
+        comment = "아웃포커싱 효과를 활용하면 인물을 더 돋보이게 할 수 있습니다."
+    elif score > 80:  # 아웃포커싱이 과도한 경우
+        status = "too_much_focus"
+        comment = "배경의 아웃포커싱이 과도합니다. 조금 더 줄여보세요."
+    else:  # 적절한 아웃포커싱
+        status = "good_focus"
+        comment = "아웃포커싱이 적절합니다."
+    
+    return {
+        'score': score,
+        'status': status,
+        'comment': comment,
+        'face_sharpness': face_sharpness,
+        'background_sharpness': background_sharpness,
+        'difference': sharpness_diff
+    }
 
 @smart_inference_mode()
 def run(
@@ -225,30 +273,31 @@ def run(
                         body_x1, body_y1, body_x2, body_y2 = [int(x) for x in xyxy]
                         body_height = body_y2 - body_y1
                         person_center_x = (body_x1 + body_x2) / 2
-
+                
                         # Calculate person height ratio to image height
                         image_height = im0.shape[0]
                         image_width = im0.shape[1]
                         person_height_ratio = (body_height / image_height) * 100
-
+                
                         # Calculate all scores
                         composition_score, distance = calculate_thirds_score(image_width, image_height, person_center_x)
                         height_ratio_score = calculate_height_ratio_score(person_height_ratio)
-
+                
                         # Process face detections
                         for (x, y, w, h) in faces:
                             face_height = h
                             head_to_body_ratio = body_height / face_height
-
+                
                             # Calculate face center and feet position
                             face_center_y = y + (h / 2)
                             feet_y = body_y2  # 발의 y좌표 (person bounding box의 하단)
                             head_y = body_y1  # 머리의 y좌표 (person bounding box의 상단)
-
+                
                             # Calculate all scores
                             ratio_score = calculate_ratio_score(head_to_body_ratio)
                             vertical_score = calculate_vertical_position_score(image_height, face_center_y, feet_y, head_y)
-
+                            focus_analysis = analyze_focus_difference(im0, (body_x1, body_y1, body_x2, body_y2), (x, y, w, h))
+                
                             # Print results
                             print(f"\n전신 세로 길이: {body_height} pixels")
                             print(f"얼굴 세로 길이: {face_height} pixels")
@@ -258,30 +307,46 @@ def run(
                             print(f"전신 비율 점수: {height_ratio_score:.1f}")
                             print(f"구도 점수: {composition_score:.1f}")
                             print(f"수직 위치 점수: {vertical_score:.1f}")
-
+                            print(f"아웃포커싱 점수: {focus_analysis['score']:.1f}")
+                            print(f"아웃포커싱 코멘트: {focus_analysis['comment']}")
+                
                             # Draw face box
                             cv2.rectangle(im0, (x, y), (x + w, y + h), (255, 0, 0), 2)
-
+                
                             # Calculate font scale based on image size
                             font_scale = min(image_width, image_height) * 0.001
                             thickness = max(1, int(min(image_width, image_height) * 0.004))
-
-                            # Add ratio text with all scores
+                
+                            # Add ratio text with main scores
                             ratio_text = (f"Ratio: {head_to_body_ratio:.2f}({ratio_score:.1f}) | "
                                         f"Height: {person_height_ratio:.1f}%({height_ratio_score:.1f}) | "
                                         f"Comp: {composition_score:.1f} | Vert: {vertical_score:.1f}")
-
-                            # 화면 최상단 중앙에 텍스트 배치
+                
+                            # 화면 최상단 중앙에 메인 텍스트 배치
                             text_size = cv2.getTextSize(ratio_text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)[0]
                             text_x = im0.shape[1]//2 - text_size[0]//2
                             text_y = text_size[1] + 10
-
-                            # 텍스트 추가
+                
+                            # 메인 텍스트 추가
                             cv2.putText(im0, ratio_text,
                                       (text_x, text_y),
                                       cv2.FONT_HERSHEY_SIMPLEX,
                                       font_scale,
                                       (0, 0, 0),
+                                      thickness)
+                
+                            # 아웃포커싱 코멘트 추가 (화면 하단에 작게 표시)
+                            comment_scale = font_scale * 0.8
+                            comment_text = f"Focus: {focus_analysis['comment']}"
+                            comment_size = cv2.getTextSize(comment_text, cv2.FONT_HERSHEY_SIMPLEX, comment_scale, thickness)[0]
+                            comment_x = im0.shape[1]//2 - comment_size[0]//2
+                            comment_y = im0.shape[0] - 20
+                
+                            cv2.putText(im0, comment_text,
+                                      (comment_x, comment_y),
+                                      cv2.FONT_HERSHEY_SIMPLEX,
+                                      comment_scale,
+                                      (0, 0, 255),  # 빨간색으로 표시
                                       thickness)
 
                             # 시각화를 위한 추가 요소 (선택사항)

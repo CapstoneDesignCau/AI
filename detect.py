@@ -1,5 +1,6 @@
 import argparse
 import os
+import requests
 import platform
 import sys
 from pathlib import Path
@@ -206,6 +207,51 @@ def combine_evaluation_results(measurements: dict, scores_and_feedbacks: list) -
     }
     
     return final_result
+
+import requests
+
+def process_image(image_url):
+    """
+    이미지 URL을 받아서 평가를 수행하는 함수
+    
+    Args:
+        image_url: 평가할 이미지의 URL
+    
+    Returns:
+        평가 결과 딕셔너리
+    """
+    try:
+        # 이미지 다운로드
+        response = requests.get(image_url)
+        response.raise_for_status()
+        
+        # 임시 파일로 저장
+        temp_path = "temp_image.jpg"
+        with open(temp_path, "wb") as f:
+            f.write(response.content)
+
+        # YOLO 모델로 이미지 분석 실행
+        result = run(
+            weights='yolov5s.pt',
+            source=temp_path,
+            save_txt=False,
+            save_conf=False,
+            save_crop=False,
+            nosave=True
+        )
+
+        # 임시 파일 삭제
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+        return result
+
+    except Exception as e:
+        return {
+            "totalScore": 0,
+            "feedback": [[1, f"이미지 처리 중 오류가 발생했습니다: {str(e)}"]],
+            "moreInfo": "처리 실패"
+        }
 
 def process_single_detection(image, det, face_detection):
     """

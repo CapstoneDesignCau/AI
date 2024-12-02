@@ -285,6 +285,89 @@ def calculate_magnification_score(image, person_bbox):
     else:
         return 0, "배율을 평가할 수 없습니다"        
 
+def calculate_exposure(image, person_bbox, face_bbox):
+    """
+    노출과 채도를 분석하는 함수
+    
+    Args:
+        image: 원본 이미지
+        person_bbox: 인물 바운딩 박스 (x1, y1, x2, y2)
+        face_bbox: 얼굴 바운딩 박스 (x, y, w, h)
+    
+    Returns:
+        (score, feedback) 튜플
+    """
+    print("\n노출 분석")
+    
+    x1, y1, x2, y2 = person_bbox
+    face_x, face_y, face_w, face_h = face_bbox
+    
+    # 마스크 생성
+    mask = np.zeros(image.shape[:2], dtype=np.uint8)
+    mask[y1:y2, x1:x2] = 255  # 인물 영역
+    
+    face_mask = np.zeros(image.shape[:2], dtype=np.uint8)
+    face_mask[face_y:face_y+face_h, face_x:face_x+face_w] = 255  # 얼굴 영역
+    
+    clothing_mask = cv2.bitwise_and(mask, cv2.bitwise_not(face_mask))  # 의상 영역
+    
+    # HSV 변환
+    hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    
+    # 명도(V) 분석
+    v_channel = hsv_image[:, :, 2]
+    face_brightness = np.mean(v_channel[face_mask == 255])
+    clothing_brightness = np.mean(v_channel[clothing_mask == 255])
+    background_brightness = np.mean(v_channel[mask == 0])
+    
+    # 채도(S) 분석
+    s_channel = hsv_image[:, :, 1]
+    face_saturation = np.mean(s_channel[face_mask == 255])
+    clothing_saturation = np.mean(s_channel[clothing_mask == 255])
+    background_saturation = np.mean(s_channel[mask == 0])
+    
+    # 점수 계산
+    score = 100.0
+    feedback_list = []
+    
+    # 얼굴 노출 평가
+    if face_brightness < 50:
+        score -= 30
+        feedback_list.append("얼굴이 너무 어둡습니다. 노출을 늘리거나 조명을 밝게 하세요")
+    elif face_brightness > 200:
+        score -= 30
+        feedback_list.append("얼굴이 너무 밝습니다. 노출을 줄이거나 조명을 어둡게 하세요")
+    
+    # 의상 노출 평가
+    if clothing_brightness < 50:
+        score -= 20
+        feedback_list.append("의상이 너무 어둡습니다")
+    elif clothing_brightness > 200:
+        score -= 20
+        feedback_list.append("의상이 너무 밝습니다")
+    
+    # 배경 노출 평가
+    if background_brightness < 50:
+        score -= 10
+        feedback_list.append("배경이 너무 어둡습니다")
+    elif background_brightness > 200:
+        score -= 10
+        feedback_list.append("배경이 너무 밝습니다")
+    
+    # 최종 점수와 피드백
+    score = max(0, score)
+    print(f"노출 점수: {score:.1f}")
+    
+    if feedback_list:
+        feedback = " / ".join(feedback_list)
+        print(f"노출 피드백: {feedback}")
+    else:
+        feedback = None
+        print("노출 피드백: 노출이 전체적으로 적절합니다")
+    
+    return score, feedback
+
+
 def combine_evaluation_results(measurements: dict, scores_and_feedbacks: list) -> dict:
     """
     평가 결과들을 합치고 최종 형식으로 변환하는 함수
@@ -303,7 +386,8 @@ def combine_evaluation_results(measurements: dict, scores_and_feedbacks: list) -
         'composition': 0.2,  # 구도
         'vertical': 0.15,   # 수직 위치
         'focus': 0.15,      # 아웃포커싱
-        'magnification': 0.15  # 배율
+        'magnification': 0.15,  # 배율
+        'exposure': 0.1        # 노출
     }
     
     # 점수 계산
@@ -419,6 +503,24 @@ def process_single_detection(image, det, face_detection):
     background = cv2.bitwise_and(image, image, mask=mask)
     background_sharpness = get_blur_score(background)
     
+    # 노출 관련 측정값 계산
+    hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    v_channel = hsv_image[:, :, 2]
+    
+    # 얼굴 마스크
+    face_mask = np.zeros(image.shape[:2], dtype=np.uint8)
+    face_mask[y:y+h, x:x+w] = 255
+    
+    # 의상 마스크 (전신 영역에서 얼굴 제외)
+    person_mask = np.zeros(image.shape[:2], dtype=np.uint8)
+    person_mask[body_y1:body_y2, body_x1:body_x2] = 255
+    clothing_mask = cv2.bitwise_and(person_mask, cv2.bitwise_not(face_mask))
+    
+    # 밝기 계산
+    face_brightness = np.mean(v_channel[face_mask == 255])
+    clothing_brightness = np.mean(v_channel[clothing_mask == 255])
+    background_brightness = np.mean(v_channel[mask == 255])
+    
     # 측정값 저장
     measurements = {
         "전신 세로 길이": f"{body_height} pixels",
@@ -427,7 +529,10 @@ def process_single_detection(image, det, face_detection):
         "전신/이미지 비율": f"{person_height_ratio:.1f}%",
         "얼굴 선명도": f"{face_sharpness:.1f}",
         "배경 선명도": f"{background_sharpness:.1f}",
-        "선명도 차이": f"{face_sharpness - background_sharpness:.1f}"
+        "선명도 차이": f"{face_sharpness - background_sharpness:.1f}",
+        "얼굴 밝기": f"{face_brightness:.1f}",
+        "의상 밝기": f"{clothing_brightness:.1f}",
+        "배경 밝기": f"{background_brightness:.1f}"
     }
     
     # 각 평가 수행
@@ -437,7 +542,8 @@ def process_single_detection(image, det, face_detection):
         calculate_thirds_score(image_width, image_height, person_center_x),
         calculate_vertical_position_score(image_height, face_center_y, feet_y, head_y),
         analyze_focus_difference(image, (body_x1, body_y1, body_x2, body_y2), (x, y, w, h)),
-        calculate_magnification_score(image, (body_x1, body_y1, body_x2, body_y2))  # 새로운 평가 추가
+        calculate_magnification_score(image, (body_x1, body_y1, body_x2, body_y2)),
+        calculate_exposure(image, (body_x1, body_y1, body_x2, body_y2), (x, y, w, h))
     ]
     
     # 결과 합치기

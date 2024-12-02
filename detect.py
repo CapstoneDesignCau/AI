@@ -485,8 +485,6 @@ def combine_evaluation_results(measurements: dict, scores_and_feedbacks: list) -
     
     return final_result
 
-import requests
-
 def process_image(image_url):
     """
     이미지 URL을 받아서 평가를 수행하는 함수

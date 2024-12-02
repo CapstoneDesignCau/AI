@@ -367,6 +367,74 @@ def calculate_exposure(image, person_bbox, face_bbox):
     
     return score, feedback
 
+def calculate_color_balance(image, person_bbox, face_bbox):
+    """
+    색상 균형을 분석하는 함수
+    
+    Args:
+        image: 원본 이미지
+        person_bbox: 인물 바운딩 박스 (x1, y1, x2, y2)
+        face_bbox: 얼굴 바운딩 박스 (x, y, w, h)
+    
+    Returns:
+        (score, feedback) 튜플
+    """
+    print("\n색상 균형 분석")
+    
+    x1, y1, x2, y2 = person_bbox
+    face_x, face_y, face_w, face_h = face_bbox
+    
+    # 마스크 생성
+    mask = np.zeros(image.shape[:2], dtype=np.uint8)
+    mask[y1:y2, x1:x2] = 255
+    
+    face_mask = np.zeros(image.shape[:2], dtype=np.uint8)
+    face_mask[face_y:face_y+face_h, face_x:face_x+face_w] = 255
+    
+    clothing_mask = cv2.bitwise_and(mask, cv2.bitwise_not(face_mask))
+    
+    # HSV 변환 및 분석
+    hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    s_channel = hsv_image[:, :, 1]
+    v_channel = hsv_image[:, :, 2]
+    
+    # 채도와 명도 계산
+    face_saturation = np.mean(s_channel[face_mask == 255])
+    clothing_saturation = np.mean(s_channel[clothing_mask == 255])
+    background_saturation = np.mean(s_channel[mask == 0])
+    
+    # 차이값 계산 및 퍼센트 변환
+    face_clothing_saturation_diff_pct = (abs(face_saturation - clothing_saturation) / 255) * 100
+    clothing_bg_saturation_diff_pct = (abs(clothing_saturation - background_saturation) / 255) * 100
+    
+    # 점수 계산
+    score = 100.0
+    feedbacks = []
+    
+    # 채도 차이 평가
+    if face_clothing_saturation_diff_pct < 5:
+        score -= 20
+        feedbacks.append("얼굴과 의상의 채도가 너무 비슷합니다. 의상의 채도를 조절해보세요")
+    elif face_clothing_saturation_diff_pct > 15:
+        score -= 10
+        feedbacks.append("얼굴과 의상의 채도 차이가 너무 큽니다")
+    
+    if clothing_bg_saturation_diff_pct < 5:
+        score -= 15
+        feedbacks.append("의상과 배경의 채도가 너무 비슷합니다")
+    elif clothing_bg_saturation_diff_pct > 15:
+        score -= 10
+        feedbacks.append("의상과 배경의 채도 차이가 너무 큽니다")
+    
+    print(f"색상 균형 점수: {score:.1f}")
+    
+    feedback = " / ".join(feedbacks) if feedbacks else None
+    if feedback:
+        print(f"색상 균형 피드백: {feedback}")
+    else:
+        print("색상 균형 피드백: 전체적인 색상 균형이 좋습니다")
+    
+    return score, feedback
 
 def combine_evaluation_results(measurements: dict, scores_and_feedbacks: list) -> dict:
     """
@@ -503,25 +571,52 @@ def process_single_detection(image, det, face_detection):
     background = cv2.bitwise_and(image, image, mask=mask)
     background_sharpness = get_blur_score(background)
     
-    # 노출 관련 측정값 계산
-    hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    v_channel = hsv_image[:, :, 2]
+    # 명도와 채도 관련 값 계산
+    x1, y1, x2, y2 = [int(x) for x in det[:4]]
+    x, y, w, h = face_detection
     
-    # 얼굴 마스크
+    # 마스크 생성
+    mask = np.zeros(image.shape[:2], dtype=np.uint8)
+    mask[y1:y2, x1:x2] = 255
+    
     face_mask = np.zeros(image.shape[:2], dtype=np.uint8)
     face_mask[y:y+h, x:x+w] = 255
     
-    # 의상 마스크 (전신 영역에서 얼굴 제외)
-    person_mask = np.zeros(image.shape[:2], dtype=np.uint8)
-    person_mask[body_y1:body_y2, body_x1:body_x2] = 255
-    clothing_mask = cv2.bitwise_and(person_mask, cv2.bitwise_not(face_mask))
+    clothing_mask = cv2.bitwise_and(mask, cv2.bitwise_not(face_mask))
     
-    # 밝기 계산
+    # HSV 변환 및 분석
+    hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    v_channel = hsv_image[:, :, 2]
+    s_channel = hsv_image[:, :, 1]
+    
+    # 명도와 채도 계산
     face_brightness = np.mean(v_channel[face_mask == 255])
     clothing_brightness = np.mean(v_channel[clothing_mask == 255])
-    background_brightness = np.mean(v_channel[mask == 255])
+    background_brightness = np.mean(v_channel[mask == 0])
     
-    # 측정값 저장
+    face_saturation = np.mean(s_channel[face_mask == 255])
+    clothing_saturation = np.mean(s_channel[clothing_mask == 255])
+    background_saturation = np.mean(s_channel[mask == 0])
+    
+    # 차이값 계산
+    face_clothing_diff = abs(face_brightness - clothing_brightness)
+    face_bg_diff = abs(face_brightness - background_brightness)
+    clothing_bg_diff = abs(clothing_brightness - background_brightness)
+    
+    face_clothing_saturation_diff = abs(face_saturation - clothing_saturation)
+    face_bg_saturation_diff = abs(face_saturation - background_saturation)
+    clothing_bg_saturation_diff = abs(clothing_saturation - background_saturation)
+    
+    # 퍼센트로 변환
+    face_clothing_diff_pct = (face_clothing_diff / 255) * 100
+    face_bg_diff_pct = (face_bg_diff / 255) * 100
+    clothing_bg_diff_pct = (clothing_bg_diff / 255) * 100
+    
+    face_clothing_saturation_diff_pct = (face_clothing_saturation_diff / 255) * 100
+    face_bg_saturation_diff_pct = (face_bg_saturation_diff / 255) * 100
+    clothing_bg_saturation_diff_pct = (clothing_bg_saturation_diff / 255) * 100
+
+    
     measurements = {
         "전신 세로 길이": f"{body_height} pixels",
         "얼굴 세로 길이": f"{face_height} pixels",
@@ -530,9 +625,20 @@ def process_single_detection(image, det, face_detection):
         "얼굴 선명도": f"{face_sharpness:.1f}",
         "배경 선명도": f"{background_sharpness:.1f}",
         "선명도 차이": f"{face_sharpness - background_sharpness:.1f}",
+        # 명도 관련 측정값
         "얼굴 밝기": f"{face_brightness:.1f}",
         "의상 밝기": f"{clothing_brightness:.1f}",
-        "배경 밝기": f"{background_brightness:.1f}"
+        "배경 밝기": f"{background_brightness:.1f}",
+        "얼굴-의상 밝기차": f"{face_clothing_diff_pct:.1f}%",
+        "얼굴-배경 밝기차": f"{face_bg_diff_pct:.1f}%",
+        "의상-배경 밝기차": f"{clothing_bg_diff_pct:.1f}%",
+        # 채도 관련 측정값
+        "얼굴 채도": f"{face_saturation:.1f}",
+        "의상 채도": f"{clothing_saturation:.1f}",
+        "배경 채도": f"{background_saturation:.1f}",
+        "얼굴-의상 채도차": f"{face_clothing_saturation_diff_pct:.1f}%",
+        "얼굴-배경 채도차": f"{face_bg_saturation_diff_pct:.1f}%",
+        "의상-배경 채도차": f"{clothing_bg_saturation_diff_pct:.1f}%"
     }
     
     # 각 평가 수행
@@ -543,7 +649,8 @@ def process_single_detection(image, det, face_detection):
         calculate_vertical_position_score(image_height, face_center_y, feet_y, head_y),
         analyze_focus_difference(image, (body_x1, body_y1, body_x2, body_y2), (x, y, w, h)),
         calculate_magnification_score(image, (body_x1, body_y1, body_x2, body_y2)),
-        calculate_exposure(image, (body_x1, body_y1, body_x2, body_y2), (x, y, w, h))
+        calculate_exposure(image, (body_x1, body_y1, body_x2, body_y2), (x, y, w, h)),
+        calculate_color_balance(image, (body_x1, body_y1, body_x2, body_y2), (x, y, w, h))
     ]
     
     # 결과 합치기

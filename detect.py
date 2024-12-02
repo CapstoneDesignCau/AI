@@ -161,6 +161,130 @@ def analyze_focus_difference(image, person_bbox, face_bbox):
     
     return score, feedback
 
+def calculate_f_value(sensor_type, focal_length, subject_distance, desired_dof):
+    """
+    F값 계산 함수
+    :param sensor_type: 센서 유형 ('full_frame', 'aps_c', 'micro_4_3' 등)
+    :param focal_length: 초점 거리 (mm)
+    :param subject_distance: 피사체와 카메라 간 거리 (m)
+    :param desired_dof: 원하는 심도 (m)
+    :return: 추천 F값
+    """
+    # 허용 혼합 원(c) 설정
+    circle_of_confusion = {
+        "full_frame": 0.03,
+        "aps_c": 0.02,
+        "micro_4_3": 0.015
+    }
+    c = circle_of_confusion.get(sensor_type, 0.03)  # 기본 풀프레임 기준
+
+    try:
+        f_value = (2 * c * subject_distance**2) / (desired_dof * focal_length**2)
+        return max(1.4, round(f_value, 1))  # F값은 최소 1.4로 설정
+    except ZeroDivisionError:
+        return None
+
+def evaluate_magnifications(image, max_zoom=10, sensor_type="full_frame", base_focal_length=26, base_distance=1, desired_dof=0.1):
+    """
+    배율(줌)별 적합성 평가 함수
+    :param image: 입력 이미지
+    :param max_zoom: 최대 배율
+    :param sensor_type: 카메라 센서 유형
+    :param base_focal_length: 1배율의 초점 거리 (mm)
+    :param base_distance: 기본 피사체 거리 (m)
+    :param desired_dof: 원하는 심도
+    :return: 추천 배율 및 관련 정보
+    """
+    best_magnification = None
+    best_score = float("-inf")
+    recommendations = []
+
+    for zoom in range(1, max_zoom + 1):
+        # 배율에 따른 초점 거리 및 피사체 거리 설정
+        focal_length = base_focal_length * zoom  # 초점 거리 = 기본 초점 거리 × 배율
+        subject_distance = base_distance * zoom  # 피사체 거리도 배율에 비례
+
+        # F값 계산
+        f_value = calculate_f_value(sensor_type, focal_length, subject_distance, desired_dof)
+
+        # 배율에 따라 이미지를 시뮬레이션(ROI 설정)
+        height, width = image.shape[:2]
+        x_center, y_center = width // 2, height // 2
+        zoomed_image = image[
+            max(0, y_center - height // (2 * zoom)):min(height, y_center + height // (2 * zoom)),
+            max(0, x_center - width // (2 * zoom)):min(width, x_center + width // (2 * zoom))
+        ]
+
+        # BGR 이미지를 HSV로 변환
+        hsv_image = cv2.cvtColor(zoomed_image, cv2.COLOR_BGR2HSV)
+
+        # V 채널에서 밝기 계산
+        v_channel = hsv_image[:, :, 2]
+        person_brightness = np.mean(v_channel)
+        background_brightness = np.mean(v_channel)
+        brightness_difference = abs(person_brightness - background_brightness)
+
+        # 점수 계산: 밝기 차이와 F값 고려
+        score = 0
+        if 10 <= brightness_difference <= 30:
+            score += 20  # 이상적인 밝기 차이 범위
+        score -= abs(f_value - 5)  # F값에서 이상적인 값(5)과의 차이를 페널티로 적용
+
+        recommendations.append((zoom, focal_length, f_value, score))
+        if score > best_score:
+            best_score = score
+            best_magnification = zoom
+
+    return best_magnification, recommendations
+
+def calculate_magnification_score(image, person_bbox):
+    """
+    배율 적합성을 평가하는 함수
+    
+    Args:
+        image: 원본 이미지
+        person_bbox: 인물 바운딩 박스
+    
+    Returns:
+        (score, feedback) 튜플
+    """
+    print("\n배율 분석")
+    
+    # 기본 파라미터 설정
+    sensor_type = "full_frame"
+    base_focal_length = 26
+    base_distance = 1
+    desired_dof = 0.1
+    
+    # 배율 평가 실행
+    best_magnification, recommendations = evaluate_magnifications(
+        image, 
+        max_zoom=10,
+        sensor_type=sensor_type,
+        base_focal_length=base_focal_length,
+        base_distance=base_distance,
+        desired_dof=desired_dof
+    )
+    
+    # 최적 추천값 찾기
+    best_rec = next((rec for rec in recommendations if rec[0] == best_magnification), None)
+    if best_rec:
+        zoom, focal_length, f_value, score = best_rec
+        normalized_score = min(100, max(0, score + 80))  # 점수 정규화
+        
+        print(f"배율 점수: {normalized_score:.1f}")
+        
+        if normalized_score >= 80:
+            print("배율 피드백: 현재 배율이 적절합니다")
+            feedback = None
+        else:
+            feedback = f"추천 배율: {zoom}배 (f/{f_value:.1f}, 초점거리: {focal_length}mm)"
+            print(f"배율 피드백: {feedback}")
+        
+        return normalized_score, feedback
+    else:
+        return 0, "배율을 평가할 수 없습니다"        
+
 def combine_evaluation_results(measurements: dict, scores_and_feedbacks: list) -> dict:
     """
     평가 결과들을 합치고 최종 형식으로 변환하는 함수
@@ -174,11 +298,12 @@ def combine_evaluation_results(measurements: dict, scores_and_feedbacks: list) -
     """
     # 가중치 설정
     weights = {
-        'ratio': 0.25,      # 등신 비율
-        'height': 0.2,      # 전신 비율
+        'ratio': 0.2,       # 등신 비율
+        'height': 0.15,     # 전신 비율
         'composition': 0.2,  # 구도
-        'vertical': 0.2,    # 수직 위치
-        'focus': 0.15       # 아웃포커싱
+        'vertical': 0.15,   # 수직 위치
+        'focus': 0.15,      # 아웃포커싱
+        'magnification': 0.15  # 배율
     }
     
     # 점수 계산
@@ -280,13 +405,29 @@ def process_single_detection(image, det, face_detection):
     face_center_y = y + (h / 2)
     feet_y = body_y2
     head_y = body_y1
+
+    # 아웃포커싱 측정값 계산
+    def get_blur_score(roi):
+        gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+        return cv2.Laplacian(gray, cv2.CV_64F).var()
+
+    face_roi = image[y:y+h, x:x+w]
+    face_sharpness = get_blur_score(face_roi)
+    
+    mask = np.ones(image.shape[:2], dtype=np.uint8) * 255
+    mask[body_y1:body_y2, body_x1:body_x2] = 0
+    background = cv2.bitwise_and(image, image, mask=mask)
+    background_sharpness = get_blur_score(background)
     
     # 측정값 저장
     measurements = {
         "전신 세로 길이": f"{body_height} pixels",
         "얼굴 세로 길이": f"{face_height} pixels",
         "등신 비율": f"{head_to_body_ratio:.2f} 등신",
-        "전신/이미지 비율": f"{person_height_ratio:.1f}%"
+        "전신/이미지 비율": f"{person_height_ratio:.1f}%",
+        "얼굴 선명도": f"{face_sharpness:.1f}",
+        "배경 선명도": f"{background_sharpness:.1f}",
+        "선명도 차이": f"{face_sharpness - background_sharpness:.1f}"
     }
     
     # 각 평가 수행
@@ -295,7 +436,8 @@ def process_single_detection(image, det, face_detection):
         calculate_height_ratio_score(person_height_ratio),
         calculate_thirds_score(image_width, image_height, person_center_x),
         calculate_vertical_position_score(image_height, face_center_y, feet_y, head_y),
-        analyze_focus_difference(image, (body_x1, body_y1, body_x2, body_y2), (x, y, w, h))
+        analyze_focus_difference(image, (body_x1, body_y1, body_x2, body_y2), (x, y, w, h)),
+        calculate_magnification_score(image, (body_x1, body_y1, body_x2, body_y2))  # 새로운 평가 추가
     ]
     
     # 결과 합치기

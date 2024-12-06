@@ -475,7 +475,7 @@ def combine_evaluation_results(measurements: dict, scores_and_feedbacks: list) -
                      for category, score in scores.items())
     
     # 측정값들을 문자열로 변환
-    more_info = "\n".join([f"{k}: {v}" for k, v in measurements.items()])
+    more_info = ", ".join([f"{k}: {v}" for k, v in measurements.items()])
     
     # 최종 결과 형식 구성
     final_result = {

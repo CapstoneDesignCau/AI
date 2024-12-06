@@ -54,7 +54,7 @@ def calculate_height_ratio_score(person_height_ratio):
         score = 100.0
         print(f"전신 비율 점수: {score:.1f}")
         print("전신 비율 피드백: 인물이 프레임에 잘 맞게 촬영되었습니다")
-        feedback = None
+        feedback = "인물의 전신 비율이 적절합니다."
     else:
         if person_height_ratio < ideal_min:
             difference = ideal_min - person_height_ratio
@@ -88,7 +88,7 @@ def calculate_thirds_score(image_width, image_height, person_center_x):
     
     if normalized_distance < 0.05:
         print("구도 피드백: 인물이 3등분선 위치에 잘 배치되어 있습니다")
-        feedback = None
+        feedback = "인물이 3등분선 또는 중앙에 잘 위치되어 있습니다."
     elif normalized_distance < 0.15:
         feedback = "구도가 양호하나, 3등분선에 더 가깝게 위치하면 더 좋을 것 같습니다"
         print(f"구도 피드백: {feedback}")
@@ -116,7 +116,7 @@ def calculate_vertical_position_score(image_height, face_center_y, feet_y, head_
     
     if score >= 80:
         print("수직 위치 피드백: 인물의 수직 위치가 적절합니다")
-        feedback = None
+        feedback = "인물의 수직 위치가 적절합니다.(얼굴은 중앙, 발은 프레임 아래)"
     elif feet_ratio > 0.1:
         feedback = "발이 프레임 아래쪽에 더 가깝게 위치하도록 구도를 잡아보세요"
         print(f"수직 위치 피드백: {feedback}")
@@ -157,7 +157,7 @@ def analyze_focus_difference(image, person_bbox, face_bbox):
         print(f"아웃포커싱 피드백: {feedback}")
     else:
         print("아웃포커싱 피드백: 아웃포커싱이 적절합니다")
-        feedback = None
+        feedback = "아웃포커싱이 적절합니다."
     
     return score, feedback
 
@@ -276,7 +276,7 @@ def calculate_magnification_score(image, person_bbox):
         
         if normalized_score >= 80:
             print("배율 피드백: 현재 배율이 적절합니다")
-            feedback = None
+            feedback = "현재 배율이 적절합니다."
         else:
             feedback = f"추천 배율: {zoom}배 (f/{f_value:.1f}, 초점거리: {focal_length}mm)"
             print(f"배율 피드백: {feedback}")
@@ -362,7 +362,7 @@ def calculate_exposure(image, person_bbox, face_bbox):
         feedback = " / ".join(feedback_list)
         print(f"노출 피드백: {feedback}")
     else:
-        feedback = None
+        feedback = "전체적인 노출이 적절합니다."
         print("노출 피드백: 노출이 전체적으로 적절합니다")
     
     return score, feedback
@@ -428,7 +428,7 @@ def calculate_color_balance(image, person_bbox, face_bbox):
     
     print(f"색상 균형 점수: {score:.1f}")
     
-    feedback = " / ".join(feedbacks) if feedbacks else None
+    feedback = " / ".join(feedbacks) if feedbacks else "색상 균형이 적절합니다."
     if feedback:
         print(f"색상 균형 피드백: {feedback}")
     else:
@@ -450,12 +450,13 @@ def combine_evaluation_results(measurements: dict, scores_and_feedbacks: list) -
     # 가중치 설정
     weights = {
         'ratio': 0.2,       # 등신 비율
-        'height': 0.15,     # 전신 비율
+        'height': 0.1,     # 전신 비율
         'composition': 0.2,  # 구도
-        'vertical': 0.15,   # 수직 위치
-        'focus': 0.15,      # 아웃포커싱
-        'magnification': 0.15,  # 배율
-        'exposure': 0.1        # 노출
+        'vertical': 0.1,   # 수직 위치
+        'focus': 0.1,      # 아웃포커싱
+        'magnification': 0.1,  # 배율
+        'exposure': 0.1,        # 노출
+        'color_balance': 0.1  # 색상 균형
     }
     
     # 점수 계산

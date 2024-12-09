@@ -28,17 +28,17 @@ def calculate_ratio_score(head_to_body_ratio):
     if ideal_min <= head_to_body_ratio <= ideal_max:
         score = 100.0
         print(f"등신 점수: {score:.1f}")
-        print("등신 피드백: 적절한 등신 비율입니다")
+        print("적절한 등신 비율입니다.")
         feedback = None
     else:
         if head_to_body_ratio < ideal_min:
             difference = ideal_min - head_to_body_ratio
             penalty = min(difference * 20, 100)
-            feedback = "카메라를 낮추어 촬영하면 다리가 더 길어 보일 수 있습니다"
+            feedback = "카메라 렌즈를 낮추면서 스마트폰을 피사체 반대로 눕히면 비율이 더 좋아보일 수 있습니다."
         else:
             difference = head_to_body_ratio - ideal_max
             penalty = min(difference * 20, 100)
-            feedback = "카메라를 높여서 촬영하면 전신 비율이 더 자연스러워질 수 있습니다"
+            feedback = "카메라 렌즈를 높이면서 스마트폰을 피사체 방향으로 눕히면 비율이 더 자연스러워 보일 수 있습니다."
         score = max(0, 100 - penalty)
         print(f"등신 점수: {score:.1f}")
         print(f"등신 피드백: {feedback}")
@@ -53,17 +53,17 @@ def calculate_height_ratio_score(person_height_ratio):
     if ideal_min <= person_height_ratio <= ideal_max:
         score = 100.0
         print(f"전신 비율 점수: {score:.1f}")
-        print("전신 비율 피드백: 인물이 프레임에 잘 맞게 촬영되었습니다")
-        feedback = "인물의 전신 비율이 적절합니다."
+        print("인물이 차지하는 비율이 적절합니다.")
+        feedback = "인물이 차지하는 비율이 적절합니다."
     else:
         if person_height_ratio < ideal_min:
             difference = ideal_min - person_height_ratio
             penalty = min(difference * 2, 100)
-            feedback = "인물을 좀 더 크게 촬영하면 좋겠습니다. 카메라를 더 가까이 가져가보세요"
+            feedback = "인물이 차지하는 비율이 너무 적습니다. 조금 더 가까이에서 촬영해보세요. (65% ~ 85% 사이를 추천드립니다.)"
         else:
             difference = person_height_ratio - ideal_max
             penalty = min(difference * 2, 100)
-            feedback = "인물이 프레임에 비해 너무 큽니다. 카메라를 조금 더 멀리서 촬영해보세요"
+            feedback = "인물이 차지하는 비율이 너무 큽니다. 조금 더 멀리서 촬영해보세요. (65% ~ 85% 사이를 추천드립니다.)"
         score = max(0, 100 - penalty)
         print(f"전신 비율 점수: {score:.1f}")
         print(f"전신 비율 피드백: {feedback}")
@@ -87,13 +87,13 @@ def calculate_thirds_score(image_width, image_height, person_center_x):
     print(f"구도 점수: {score:.1f}")
     
     if normalized_distance < 0.05:
-        print("구도 피드백: 인물이 3등분선 위치에 잘 배치되어 있습니다")
+        print("인물이 3등분선 또는 중앙에 잘 위치되어 있습니다.")
         feedback = "인물이 3등분선 또는 중앙에 잘 위치되어 있습니다."
     elif normalized_distance < 0.15:
-        feedback = "구도가 양호하나, 3등분선에 더 가깝게 위치하면 더 좋을 것 같습니다"
+        feedback = "구도가 양호하나, 3등분선에 더 가깝게 위치하면 더 좋을 것 같습니다."
         print(f"구도 피드백: {feedback}")
     else:
-        feedback = "인물을 화면의 1/3 지점이나 중앙에 위치시키면 더 안정적인 구도가 될 수 있습니다"
+        feedback = "인물을 화면의 1/3 지점이나 중앙에 위치시키면 더 안정적인 구도가 될 수 있습니다."
         print(f"구도 피드백: {feedback}")
     
     return score, feedback
@@ -392,49 +392,92 @@ def calculate_color_balance(image, person_bbox, face_bbox):
     face_mask[face_y:face_y+face_h, face_x:face_x+face_w] = 255
     
     clothing_mask = cv2.bitwise_and(mask, cv2.bitwise_not(face_mask))
-    
-    # HSV 변환 및 분석
+
+    # BGR 이미지를 HSV로 변환
     hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    s_channel = hsv_image[:, :, 1]
+    
+    # V (명도) 채널에서 명도 계산
     v_channel = hsv_image[:, :, 2]
-    
-    # 채도와 명도 계산
-    face_saturation = np.mean(s_channel[face_mask == 255])
-    clothing_saturation = np.mean(s_channel[clothing_mask == 255])
-    background_saturation = np.mean(s_channel[mask == 0])
-    
-    # 차이값 계산 및 퍼센트 변환
-    face_clothing_saturation_diff_pct = (abs(face_saturation - clothing_saturation) / 255) * 100
-    clothing_bg_saturation_diff_pct = (abs(clothing_saturation - background_saturation) / 255) * 100
+    face_brightness = np.mean(v_channel[face_mask == 255])  # 얼굴 영역의 명도 평균
+    clothing_brightness = np.mean(v_channel[clothing_mask == 255])  # 의상 영역의 명도 평균
+    background_brightness = np.mean(v_channel[mask == 0])  # 배경 영역의 명도 평
+    # S (채도) 채널에서 채도 계산
+    s_channel = hsv_image[:, :, 1]
+    face_saturation = np.mean(s_channel[face_mask == 255])  # 얼굴 영역의 채도 평균
+    clothing_saturation = np.mean(s_channel[clothing_mask == 255])  # 의상 영역의 채도 평균
+    background_saturation = np.mean(s_channel[mask == 0])  # 배경 영역의 채도 평
+    # 결과 출력
+    print(f"Face brightness: {face_brightness}")
+    print(f"Clothing brightness: {clothing_brightness}")
+    print(f"Background brightness: {background_brightness}")
+    print(f"Face saturation: {face_saturation}")
+    print(f"Clothing saturation: {clothing_saturation}")
+    print(f"Background saturation: {background_saturation}")
+    # 얼굴과 의상 간의 명도 차이 계산 (0~255 범위)
+    face_clothing_diff = abs(face_brightness - clothing_brightness)
+    face_bg_diff = abs(face_brightness - background_brightness)
+    clothing_bg_diff = abs(clothing_brightness - background_brightness)
+    # 얼굴과 의상 간의 채도 차이 계산 (0~255 범위)
+    face_clothing_saturation_diff = abs(face_saturation - clothing_saturation)
+    face_bg_saturation_diff = abs(face_saturation - background_saturation)
+    clothing_bg_saturation_diff = abs(clothing_saturation - background_saturation)
+    # 명도 차이를 퍼센트로 변환
+    face_clothing_diff_pct = (face_clothing_diff / 255) * 100
+    face_bg_diff_pct = (face_bg_diff / 255) * 100
+    clothing_bg_diff_pct = (clothing_bg_diff / 255) * 10
+    # 채도 차이를 퍼센트로 변환
+    face_clothing_saturation_diff_pct = (face_clothing_saturation_diff / 255) * 100
+    face_bg_saturation_diff_pct = (face_bg_saturation_diff / 255) * 100
+    clothing_bg_saturation_diff_pct = (clothing_bg_saturation_diff / 255) * 10
+    print(f"Face-Clothing brightness difference: {face_clothing_diff_pct:.2f}%")
+    print(f"Face-Background brightness difference: {face_bg_diff_pct:.2f}%")
+    print(f"Clothing-Background brightness difference: {clothing_bg_diff_pct:.2f}%")
+    print(f"Face-Clothing saturation difference: {face_clothing_saturation_diff_pct:.2f}%")
+    print(f"Face-Background saturation difference: {face_bg_saturation_diff_pct:.2f}%")
+    print(f"Clothing-Background saturation difference: {clothing_bg_saturation_diff_pct:.2f}%")
     
     # 점수 계산
     score = 100.0
-    feedbacks = []
+    feedbacks = []  # feedbacks 리스트 초기화
     
-    # 채도 차이 평가
+    # 얼굴과 의상의 명도 차이 피드백
+    if face_clothing_diff_pct < 5:
+        feedbacks.append("얼굴과 의상의 명도 차이가 매우 적어, 얼굴이 잘 부각되지 않을 수 있습니다. 의상을 조금 더 밝은 색으로 선택하거나, 얼굴의 명도를 조금 더 높이면 좋습니다. 화이트 밸런스를 조정하거나 노출 보정을 통해 얼굴의 밝기를 높여 보세요. 또한, 얼굴의 명도를 높이는 방법으로 하이라이트를 조정하거나, 디지털 편집 프로그램에서 'Brightness/Contrast' 기능을 사용해보는 것도 좋은 방법입니다.")
+    elif 5 <= face_clothing_diff_pct <= 15:
+        feedbacks.append("얼굴과 의상의 명도 차이가 적당하여 얼굴이 자연스럽게 부각됩니다. 이 상태는 매우 자연스럽습니다. 하지만, 'Vibrance' 슬라이더를 사용해 얼굴의 색감을 살리거나, 의상의 채도를 살짝 조정하여 좀 더 선명하고 생동감 있는 효과를 줄 수 있습니다.")
+    elif face_clothing_diff_pct > 15:
+        feedbacks.append("얼굴과 의상의 명도 차이가 커서 얼굴이 잘 부각됩니다. 그러나 너무 강조될 수 있으므로 의상의 명도를 조금 낮추거나, 얼굴의 위치를 조금 바꿔서 자연스럽게 만들 수 있습니다. 채도를 조정하여 의상의 색이 너무 강하지 않게 할 수 있습니다. 또한, 'Curves' 도구를 사용하여 의상과 얼굴의 명도를 더 부드럽게 맞춰 자연스러운 효과를 얻을 수 있습니다.")
+
+    # 의상과 배경의 명도 차이 피드백
+    if clothing_bg_diff_pct < 10:
+        feedbacks.append("의상과 배경의 명도 차이가 적어, 피사체가 배경에 자연스럽게 녹아듭니다. 의상 색상을 더 밝은 색으로 선택하거나 배경의 명도를 낮춰 보세요. 'Exposure Compensation' 기능을 사용하여 배경의 밝기를 낮추거나, 의상에 채도를 높여 대비를 강화할 수 있습니다.")
+    elif 10 <= clothing_bg_diff_pct <= 30:
+        feedbacks.append("의상과 배경의 명도 차이가 적당하여 피사체가 잘 부각됩니다. 현재 상태는 잘 조화된 이미지입니다. 하지만, 배경의 색상을 조금 더 차분하게 만들거나, 의상의 채도를 높여서 색감의 강렬함을 조절하는 방법을 고려할 수 있습니다.")
+    elif clothing_bg_diff_pct > 30:
+        feedbacks.append("의상과 배경의 명도 차이가 커서 피사체가 배경에서 과도하게 강조됩니다. 의상 색상을 조금 더 어두운 톤으로 선택하거나 배경을 흐리게 하여 조화롭게 만들 수 있습니다. 배경을 흐리게 만들기 위해 'Blur' 효과를 사용하거나, 의상 색상을 좀 더 톤 다운하여 자연스러운 조화를 이룰 수 있습니다. 또한, Vibrance 기능으로 색감을 조금 더 부드럽게 할 수 있습니다.")
+    
+    # 얼굴과 의상의 채도 차이 피드백
     if face_clothing_saturation_diff_pct < 5:
-        score -= 20
-        feedbacks.append("얼굴과 의상의 채도가 너무 비슷합니다. 의상의 채도를 조절해보세요")
+        feedbacks.append("얼굴과 의상의 채도가 비슷하여 색감이 너무 단조로워 보일 수 있습니다. 의상을 조금 더 채도가 높은 색으로 선택하거나 얼굴에 약간의 채도를 추가해 보세요. 채도를 높이기 위해 'Saturation' 슬라이더를 오른쪽으로 이동시키거나, 'Vibrance'로 자연스럽게 색감을 강조할 수 있습니다.")
+    elif 5 <= face_clothing_saturation_diff_pct <= 15:
+        feedbacks.append("얼굴과 의상의 채도 차이가 적당하여 색감이 자연스럽게 맞아떨어집니다. 이 상태는 매우 균형 잡힌 이미지입니다. 그러나 배경과 의상의 색상을 대비시켜 강렬한 이미지를 만들고 싶다면 의상의 채도를 조금 더 높여 보세요.")
     elif face_clothing_saturation_diff_pct > 15:
-        score -= 10
-        feedbacks.append("얼굴과 의상의 채도 차이가 너무 큽니다")
-    
+        feedbacks.append("얼굴과 의상의 채도 차이가 커서 색이 많이 강조됩니다. 배경의 색감을 살짝 조정하여 전체적인 색 균형을 맞추거나, 의상 색상을 조금 더 자연스럽게 만들기 위해 'Saturation' 슬라이더를 낮추는 것도 좋습니다. 또한, 의상과 배경의 색조가 너무 겹치지 않도록 색감을 조정하여 균형을 맞출 수 있습니다.")
+
+    # 의상과 배경의 채도 차이 피드백
     if clothing_bg_saturation_diff_pct < 5:
-        score -= 15
-        feedbacks.append("의상과 배경의 채도가 너무 비슷합니다")
+        feedbacks.append("의상과 배경의 채도가 비슷하여 색감이 너무 평범하게 느껴질 수 있습니다. 의상 색감을 좀 더 뚜렷하게 강조하거나, 배경을 흐리게 하여 더 두드러지게 만들 수 있습니다. 또한, 배경의 채도를 조금 낮추어 의상이 더욱 눈에 띄게 할 수 있습니다.")
+    elif 5 <= clothing_bg_saturation_diff_pct <= 15:
+        feedbacks.append("의상과 배경의 채도 차이가 적당하여 색감이 자연스럽게 어우러집니다. 현재 상태는 균형 잡힌 이미지입니다. 배경의 채도를 조절하거나, 의상의 색상을 더 진하게 만들어 색감의 대비를 더 강하게 만들 수 있습니다.")
     elif clothing_bg_saturation_diff_pct > 15:
-        score -= 10
-        feedbacks.append("의상과 배경의 채도 차이가 너무 큽니다")
-    
-    print(f"색상 균형 점수: {score:.1f}")
-    
-    feedback = " / ".join(feedbacks) if feedbacks else "색상 균형이 적절합니다."
-    if feedback:
-        print(f"색상 균형 피드백: {feedback}")
-    else:
-        print("색상 균형 피드백: 전체적인 색상 균형이 좋습니다")
-    
-    return score, feedback
+        feedbacks.append("의상과 배경의 채도 차이가 커서 색이 많이 강조됩니다. 이 경우 배경의 채도를 조금 낮추거나, 의상의 색감을 더 자연스럽게 만들어 조화를 이룰 수 있습니다.")
+
+    # 피드백 출력 추가
+    print("\n피드백:")
+    for i, fb in enumerate(feedbacks, 1):
+        print(f"{i}. {fb}")
+
+    return score, feedbacks
 
 def combine_evaluation_results(measurements: dict, scores_and_feedbacks: list) -> dict:
     """

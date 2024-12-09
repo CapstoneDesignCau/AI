@@ -29,16 +29,16 @@ def calculate_ratio_score(head_to_body_ratio):
         score = 100.0
         print(f"등신 점수: {score:.1f}")
         print("적절한 등신 비율입니다.")
-        feedback = None
+        feedback = "등신 분석\n적절한 등신 비율입니다."
     else:
         if head_to_body_ratio < ideal_min:
             difference = ideal_min - head_to_body_ratio
             penalty = min(difference * 20, 100)
-            feedback = "카메라 렌즈를 낮추면서 스마트폰을 피사체 반대로 눕히면 비율이 더 좋아보일 수 있습니다."
+            feedback = "등신 분석\n카메라 렌즈를 낮추면서 스마트폰을 피사체 반대로 눕히면 비율이 더 좋아보일 수 있습니다."
         else:
             difference = head_to_body_ratio - ideal_max
             penalty = min(difference * 20, 100)
-            feedback = "카메라 렌즈를 높이면서 스마트폰을 피사체 방향으로 눕히면 비율이 더 자연스러워 보일 수 있습니다."
+            feedback = "등신 분석\n카메라 렌즈를 높이면서 스마트폰을 피사체 방향으로 눕히면 비율이 더 자연스러워 보일 수 있습니다."
         score = max(0, 100 - penalty)
         print(f"등신 점수: {score:.1f}")
         print(f"등신 피드백: {feedback}")
@@ -54,16 +54,16 @@ def calculate_height_ratio_score(person_height_ratio):
         score = 100.0
         print(f"전신 비율 점수: {score:.1f}")
         print("인물이 차지하는 비율이 적절합니다.")
-        feedback = "인물이 차지하는 비율이 적절합니다."
+        feedback = "비율 분석\n인물이 차지하는 비율이 적절합니다."
     else:
         if person_height_ratio < ideal_min:
             difference = ideal_min - person_height_ratio
             penalty = min(difference * 2, 100)
-            feedback = "인물이 차지하는 비율이 너무 적습니다. 조금 더 가까이에서 촬영해보세요. (65% ~ 85% 사이를 추천드립니다.)"
+            feedback = "비율 분석\n인물이 차지하는 비율이 너무 적습니다. 조금 더 가까이에서 촬영해보세요. (65% ~ 85% 사이를 추천드립니다.)"
         else:
             difference = person_height_ratio - ideal_max
             penalty = min(difference * 2, 100)
-            feedback = "인물이 차지하는 비율이 너무 큽니다. 조금 더 멀리서 촬영해보세요. (65% ~ 85% 사이를 추천드립니다.)"
+            feedback = "비율 분석\n인물이 차지하는 비율이 너무 큽니다. 조금 더 멀리서 촬영해보세요. (65% ~ 85% 사이를 추천드립니다.)"
         score = max(0, 100 - penalty)
         print(f"전신 비율 점수: {score:.1f}")
         print(f"전신 비율 피드백: {feedback}")
@@ -88,12 +88,12 @@ def calculate_thirds_score(image_width, image_height, person_center_x):
     
     if normalized_distance < 0.05:
         print("인물이 3등분선 또는 중앙에 잘 위치되어 있습니다.")
-        feedback = "인물이 3등분선 또는 중앙에 잘 위치되어 있습니다."
+        feedback = "구도 분석 \n인물이 3등분선 또는 중앙에 잘 위치되어 있습니다."
     elif normalized_distance < 0.15:
-        feedback = "구도가 양호하나, 3등분선에 더 가깝게 위치하면 더 좋을 것 같습니다."
+        feedback = "구도 분석 \n구도가 양호하나, 3등분선에 더 가깝게 위치하면 더 좋을 것 같습니다."
         print(f"구도 피드백: {feedback}")
     else:
-        feedback = "인물을 화면의 1/3 지점이나 중앙에 위치시키면 더 안정적인 구도가 될 수 있습니다."
+        feedback = "구도 분석 \n인물을 화면의 1/3 지점이나 중앙에 위치시키면 더 안정적인 구도가 될 수 있습니다."
         print(f"구도 피드백: {feedback}")
     
     return score, feedback
@@ -116,12 +116,12 @@ def calculate_vertical_position_score(image_height, face_center_y, feet_y, head_
     
     if score >= 80:
         print("수직 위치 피드백: 인물의 수직 위치가 적절합니다")
-        feedback = "인물의 수직 위치가 적절합니다.(얼굴은 중앙, 발은 프레임 아래)"
+        feedback = "수직 위치 분석\n인물의 수직 위치가 적절합니다.(얼굴은 중앙, 발은 프레임 아래)"
     elif feet_ratio > 0.1:
-        feedback = "발이 프레임 아래쪽에 더 가깝게 위치하도록 구도를 잡아보세요"
+        feedback = "수직 위치 분석\n발이 프레임 아래쪽에 더 가깝게 위치하도록 구도를 잡아보세요"
         print(f"수직 위치 피드백: {feedback}")
     else:
-        feedback = "얼굴이 화면 중앙에 오도록 구도를 조정해보세요"
+        feedback = "수직 위치 분석\n얼굴이 화면 중앙에 오도록 구도를 조정해보세요"
         print(f"수직 위치 피드백: {feedback}")
     
     return score, feedback
@@ -150,13 +150,13 @@ def analyze_focus_difference(image, person_bbox, face_bbox):
     print(f"아웃포커싱 점수: {score:.1f}")
     
     if score < 30:
-        feedback = "아웃포커싱 효과를 활용하면 인물을 더 돋보이게 할 수 있습니다. 심도를 2.8보다 더 높이세요. 배경을 흐리게 하여 인물을 더 강조할 수 있습니다."
+        feedback = ",아웃포커싱 분석\n아웃포커싱 효과를 활용하면 인물을 더 돋보이게 할 수 있습니다. 심도를 2.8보다 더 높이세요. 배경을 흐리게 하여 인물을 더 강조할 수 있습니다."
         print(f"아웃포커싱 피드백: {feedback}")
     elif score > 80:
-        feedback = "배경의 아웃포커싱이 과도합니다. 심도를 2.8보다 더 낮추세요."
+        feedback = "아웃포커싱 분석\n배경의 아웃포커싱이 과도합니다. 심도를 2.8보다 더 낮추세요."
         print(f"아웃포커싱 피드백: {feedback}")
     else:
-        print("아웃포커싱 피드백: 아웃포커싱이 적절합니다")
+        print("아웃포커싱 분석\n아웃포커싱 피드백: 아웃포커싱이 적절합니다")
         feedback = "아웃포커싱이 적절합니다."
     
     return score, feedback
@@ -353,7 +353,7 @@ def calculate_color_balance(image, person_bbox, face_bbox):
     
     # 점수 계산
     score = 100.0
-    feedbacks = []  # feedbacks 리스트 초기화
+    feedbacks = ["명도 채도 분석"]  # feedbacks 리스트 초기화
     
     # 얼굴과 의상의 명도 차이 피드백
     if face_clothing_diff_pct < 5:

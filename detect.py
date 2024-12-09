@@ -150,140 +150,16 @@ def analyze_focus_difference(image, person_bbox, face_bbox):
     print(f"아웃포커싱 점수: {score:.1f}")
     
     if score < 30:
-        feedback = "아웃포커싱 효과를 활용하면 인물을 더 돋보이게 할 수 있습니다"
+        feedback = "아웃포커싱 효과를 활용하면 인물을 더 돋보이게 할 수 있습니다. 심도를 2.8보다 더 높이세요. 배경을 흐리게 하여 인물을 더 강조할 수 있습니다."
         print(f"아웃포커싱 피드백: {feedback}")
     elif score > 80:
-        feedback = "배경의 아웃포커싱이 과도합니다. 조금 더 줄여보세요"
+        feedback = "배경의 아웃포커싱이 과도합니다. 심도를 2.8보다 더 낮추세요."
         print(f"아웃포커싱 피드백: {feedback}")
     else:
         print("아웃포커싱 피드백: 아웃포커싱이 적절합니다")
         feedback = "아웃포커싱이 적절합니다."
     
     return score, feedback
-
-def calculate_f_value(sensor_type, focal_length, subject_distance, desired_dof):
-    """
-    F값 계산 함수
-    :param sensor_type: 센서 유형 ('full_frame', 'aps_c', 'micro_4_3' 등)
-    :param focal_length: 초점 거리 (mm)
-    :param subject_distance: 피사체와 카메라 간 거리 (m)
-    :param desired_dof: 원하는 심도 (m)
-    :return: 추천 F값
-    """
-    # 허용 혼합 원(c) 설정
-    circle_of_confusion = {
-        "full_frame": 0.03,
-        "aps_c": 0.02,
-        "micro_4_3": 0.015
-    }
-    c = circle_of_confusion.get(sensor_type, 0.03)  # 기본 풀프레임 기준
-
-    try:
-        f_value = (2 * c * subject_distance**2) / (desired_dof * focal_length**2)
-        return max(1.4, round(f_value, 1))  # F값은 최소 1.4로 설정
-    except ZeroDivisionError:
-        return None
-
-def evaluate_magnifications(image, max_zoom=10, sensor_type="full_frame", base_focal_length=26, base_distance=1, desired_dof=0.1):
-    """
-    배율(줌)별 적합성 평가 함수
-    :param image: 입력 이미지
-    :param max_zoom: 최대 배율
-    :param sensor_type: 카메라 센서 유형
-    :param base_focal_length: 1배율의 초점 거리 (mm)
-    :param base_distance: 기본 피사체 거리 (m)
-    :param desired_dof: 원하는 심도
-    :return: 추천 배율 및 관련 정보
-    """
-    best_magnification = None
-    best_score = float("-inf")
-    recommendations = []
-
-    for zoom in range(1, max_zoom + 1):
-        # 배율에 따른 초점 거리 및 피사체 거리 설정
-        focal_length = base_focal_length * zoom  # 초점 거리 = 기본 초점 거리 × 배율
-        subject_distance = base_distance * zoom  # 피사체 거리도 배율에 비례
-
-        # F값 계산
-        f_value = calculate_f_value(sensor_type, focal_length, subject_distance, desired_dof)
-
-        # 배율에 따라 이미지를 시뮬레이션(ROI 설정)
-        height, width = image.shape[:2]
-        x_center, y_center = width // 2, height // 2
-        zoomed_image = image[
-            max(0, y_center - height // (2 * zoom)):min(height, y_center + height // (2 * zoom)),
-            max(0, x_center - width // (2 * zoom)):min(width, x_center + width // (2 * zoom))
-        ]
-
-        # BGR 이미지를 HSV로 변환
-        hsv_image = cv2.cvtColor(zoomed_image, cv2.COLOR_BGR2HSV)
-
-        # V 채널에서 밝기 계산
-        v_channel = hsv_image[:, :, 2]
-        person_brightness = np.mean(v_channel)
-        background_brightness = np.mean(v_channel)
-        brightness_difference = abs(person_brightness - background_brightness)
-
-        # 점수 계산: 밝기 차이와 F값 고려
-        score = 0
-        if 10 <= brightness_difference <= 30:
-            score += 20  # 이상적인 밝기 차이 범위
-        score -= abs(f_value - 5)  # F값에서 이상적인 값(5)과의 차이를 페널티로 적용
-
-        recommendations.append((zoom, focal_length, f_value, score))
-        if score > best_score:
-            best_score = score
-            best_magnification = zoom
-
-    return best_magnification, recommendations
-
-def calculate_magnification_score(image, person_bbox):
-    """
-    배율 적합성을 평가하는 함수
-    
-    Args:
-        image: 원본 이미지
-        person_bbox: 인물 바운딩 박스
-    
-    Returns:
-        (score, feedback) 튜플
-    """
-    print("\n배율 분석")
-    
-    # 기본 파라미터 설정
-    sensor_type = "full_frame"
-    base_focal_length = 26
-    base_distance = 1
-    desired_dof = 0.1
-    
-    # 배율 평가 실행
-    best_magnification, recommendations = evaluate_magnifications(
-        image, 
-        max_zoom=10,
-        sensor_type=sensor_type,
-        base_focal_length=base_focal_length,
-        base_distance=base_distance,
-        desired_dof=desired_dof
-    )
-    
-    # 최적 추천값 찾기
-    best_rec = next((rec for rec in recommendations if rec[0] == best_magnification), None)
-    if best_rec:
-        zoom, focal_length, f_value, score = best_rec
-        normalized_score = min(100, max(0, score + 80))  # 점수 정규화
-        
-        print(f"배율 점수: {normalized_score:.1f}")
-        
-        if normalized_score >= 80:
-            print("배율 피드백: 현재 배율이 적절합니다")
-            feedback = "현재 배율이 적절합니다."
-        else:
-            feedback = f"추천 배율: {zoom}배 (f/{f_value:.1f}, 초점거리: {focal_length}mm)"
-            print(f"배율 피드백: {feedback}")
-        
-        return normalized_score, feedback
-    else:
-        return 0, "배율을 평가할 수 없습니다"        
 
 def calculate_exposure(image, person_bbox, face_bbox):
     """
@@ -328,44 +204,83 @@ def calculate_exposure(image, person_bbox, face_bbox):
     
     # 점수 계산
     score = 100.0
-    feedback_list = []
+    feedback_list = ["노출 분석"]
     
-    # 얼굴 노출 평가
+    print("\n노출 상세 분석:")
+    
+    # 얼굴 노출 분석
     if face_brightness < 50:
         score -= 30
-        feedback_list.append("얼굴이 너무 어둡습니다. 노출을 늘리거나 조명을 밝게 하세요")
+        feedback = "얼굴이 너무 어둡습니다. 스마트폰 카메라 설정을 조정하거나 더 밝은 환경에서 촬영해보세요.\n"
+        feedback += "조정 방법:\n"
+        feedback += "1. 화면을 터치하여 얼굴에 초점을 맞춘 후, 밝기를 조정하세요.\n"
+        feedback += "2. 더 밝은 조명 아래에서 촬영하세요.\n"
+        feedback += "3. 플래시를 사용해보세요."
+        feedback_list.append(feedback)
+        print(feedback)
     elif face_brightness > 200:
         score -= 30
-        feedback_list.append("얼굴이 너무 밝습니다. 노출을 줄이거나 조명을 어둡게 하세요")
+        feedback = "얼굴이 너무 밝습니다. 스마트폰 카메라 설정을 조정하거나 조명을 줄여보세요.\n"
+        feedback += "조정 방법:\n"
+        feedback += "1. 화면을 터치하여 얼굴에 초점을 맞춘 후, 밝기를 낮춰보세요.\n"
+        feedback += "2. 더 어두운 장소에서 촬영하거나 조명을 줄이세요."
+        feedback_list.append(feedback)
+        print(feedback)
+    else:
+        print("얼굴의 노출이 적절합니다.")
     
-    # 의상 노출 평가
+    # 의상 노출 분석
     if clothing_brightness < 50:
         score -= 20
-        feedback_list.append("의상이 너무 어둡습니다")
+        feedback = "의상이 너무 어둡습니다. 스마트폰 카메라 설정을 조정하거나 더 밝은 환경에서 촬영해보세요.\n"
+        feedback += "조정 방법:\n"
+        feedback += "1. 화면을 터치하여 의상에 초점을 맞춘 후, 밝기를 조정하세요.\n"
+        feedback += "2. 더 밝은 조명 아래에서 촬영하세요.\n"
+        feedback += "3. 플래시를 사용해보세요."
+        feedback_list.append(feedback)
+        print(feedback)
     elif clothing_brightness > 200:
         score -= 20
-        feedback_list.append("의상이 너무 밝습니다")
+        feedback = "의상이 너무 밝습니다. 스마트폰 카메라 설정을 조정하거나 조명을 줄여보세요.\n"
+        feedback += "조정 방법:\n"
+        feedback += "1. 화면을 터치하여 의상에 초점을 맞춘 후, 밝기를 낮춰보세요.\n"
+        feedback += "2. 더 어두운 장소에서 촬영하거나 조명을 줄이세요."
+        feedback_list.append(feedback)
+        print(feedback)
+    else:
+        print("의상의 노출이 적절합니다.")
     
-    # 배경 노출 평가
+    # 배경 노출 분석
     if background_brightness < 50:
         score -= 10
-        feedback_list.append("배경이 너무 어둡습니다")
+        feedback = "배경이 너무 어둡습니다. 스마트폰 카메라 설정을 조정하거나 더 밝은 환경에서 촬영해보세요.\n"
+        feedback += "조정 방법:\n"
+        feedback += "1. 화면을 터치하여 배경에 초점을 맞춘 후, 밝기를 조정하세요.\n"
+        feedback += "2. 더 밝은 장소에서 촬영하세요."
+        feedback_list.append(feedback)
+        print(feedback)
     elif background_brightness > 200:
         score -= 10
-        feedback_list.append("배경이 너무 밝습니다")
+        feedback = "배경이 너무 밝습니다. 스마트폰 카메라 설정을 조정하거나 조명을 줄여보세요.\n"
+        feedback += "조정 방법:\n"
+        feedback += "1. 화면을 터치하여 배경에 초점을 맞춘 후, 밝기를 낮춰보세요.\n"
+        feedback += "2. 어두운 장소에서 촬영하거나 조명을 줄이세요."
+        feedback_list.append(feedback)
+        print(feedback)
+    else:
+        print("배경의 노출이 적절합니다.")
     
     # 최종 점수와 피드백
     score = max(0, score)
-    print(f"노출 점수: {score:.1f}")
+    print(f"\n노출 점수: {score:.1f}")
     
     if feedback_list:
-        feedback = " / ".join(feedback_list)
-        print(f"노출 피드백: {feedback}")
+        final_feedback = "\n".join(feedback_list)
     else:
-        feedback = "전체적인 노출이 적절합니다."
-        print("노출 피드백: 노출이 전체적으로 적절합니다")
+        final_feedback = "전체적인 노출이 적절합니다."
+        print("\n노출 피드백: 노출이 전체적으로 적절합니다")
     
-    return score, feedback
+    return score, final_feedback
 
 def calculate_color_balance(image, person_bbox, face_bbox):
     """
@@ -493,11 +408,10 @@ def combine_evaluation_results(measurements: dict, scores_and_feedbacks: list) -
     # 가중치 설정
     weights = {
         'ratio': 0.2,       # 등신 비율
-        'height': 0.1,     # 전신 비율
+        'height': 0.2,     # 전신 비율
         'composition': 0.2,  # 구도
         'vertical': 0.1,   # 수직 위치
         'focus': 0.1,      # 아웃포커싱
-        'magnification': 0.1,  # 배율
         'exposure': 0.1,        # 노출
         'color_balance': 0.1  # 색상 균형
     }
@@ -690,7 +604,6 @@ def process_single_detection(image, det, face_detection):
         calculate_thirds_score(image_width, image_height, person_center_x),
         calculate_vertical_position_score(image_height, face_center_y, feet_y, head_y),
         analyze_focus_difference(image, (body_x1, body_y1, body_x2, body_y2), (x, y, w, h)),
-        calculate_magnification_score(image, (body_x1, body_y1, body_x2, body_y2)),
         calculate_exposure(image, (body_x1, body_y1, body_x2, body_y2), (x, y, w, h)),
         calculate_color_balance(image, (body_x1, body_y1, body_x2, body_y2), (x, y, w, h))
     ]

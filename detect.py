@@ -490,6 +490,40 @@ def process_image(image_url):
             "moreInfo": "처리 실패"
         }
 
+def resize_image(image, max_size=1280):
+    """
+    이미지 크기가 너무 큰 경우 리사이즈하는 함수
+    
+    Args:
+        image: 원본 이미지 (numpy array)
+        max_size: 최대 허용 크기 (픽셀)
+    
+    Returns:
+        리사이즈된 이미지
+    """
+    # 이미지의 현재 크기 확인
+    height, width = image.shape[:2]
+    
+    # 현재 크기 출력
+    print(f"\n원본 이미지 크기: {width}x{height}")
+    
+    # 최대 크기를 초과하는지 확인
+    if max(height, width) > max_size:
+        # 리사이징 비율 계산
+        ratio = max_size / float(max(height, width))
+        new_width = int(width * ratio)
+        new_height = int(height * ratio)
+        
+        # 이미지 리사이징
+        resized = cv2.resize(image, (new_width, new_height), 
+                           interpolation=cv2.INTER_AREA)
+        
+        print(f"리사이즈된 이미지 크기: {new_width}x{new_height}")
+        return resized
+    
+    print("이미지 크기가 적절하여 리사이징이 필요하지 않습니다.")
+    return image
+    
 def process_single_detection(image, det, face_detection):
     """
     단일 인물 검출 결과를 처리하는 함수
@@ -502,6 +536,10 @@ def process_single_detection(image, det, face_detection):
     Returns:
         평가 결과 딕셔너리
     """
+
+    # 이미지 리사이징 추가
+    image = resize_image(image)
+
     # 기본 측정값 계산
     body_x1, body_y1, body_x2, body_y2 = [int(x) for x in det[:4]]
     body_height = body_y2 - body_y1
@@ -683,6 +721,12 @@ def run(
     seen, windows, dt = 0, [], (Profile(), Profile(), Profile())
     
     for path, im, im0s, vid_cap, s in dataset:
+        # 이미지 로드 후 바로 리사이징 적용
+        if isinstance(im0s, np.ndarray):
+            im0s = resize_image(im0s)
+        elif isinstance(im0s, list):
+            im0s = [resize_image(img) for img in im0s]
+
         with dt[0]:
             im = torch.from_numpy(im).to(device)
             im = im.half() if model.fp16 else im.float()

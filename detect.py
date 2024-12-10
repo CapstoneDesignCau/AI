@@ -146,18 +146,29 @@ def analyze_focus_difference(image, person_bbox, face_bbox):
     
     sharpness_diff = face_sharpness - background_sharpness
     max_diff = 1000
-    score = min(100, max(0, (sharpness_diff / max_diff) * 100))
-    print(f"아웃포커싱 점수: {score:.1f}")
+
+    # 수정된 점수 계산 로직
+    normalized_diff = (sharpness_diff / max_diff) * 100
     
-    if score < 30:
-        feedback = ",아웃포커싱 분석\n아웃포커싱 효과를 활용하면 인물을 더 돋보이게 할 수 있습니다. 심도를 2.8보다 더 높이세요. 배경을 흐리게 하여 인물을 더 강조할 수 있습니다."
-        print(f"아웃포커싱 피드백: {feedback}")
-    elif score > 80:
-        feedback = "아웃포커싱 분석\n배경의 아웃포커싱이 과도합니다. 심도를 2.8보다 더 낮추세요."
-        print(f"아웃포커싱 피드백: {feedback}")
+    if 30 <= normalized_diff <= 80:
+        # 이상적인 아웃포커싱 범위
+        base_score = 100.0
+        # 중간값(55)에서 멀어질수록 점수 차감
+        distance_from_optimal = abs(55 - normalized_diff)
+        score = base_score - (distance_from_optimal * 0.5)  # 거리에 따라 완만하게 감소
+        feedback = "아웃포커싱 분석\n아웃포커싱이 적절합니다."
+    elif normalized_diff < 30:
+        # 아웃포커싱이 부족한 경우
+        score = 70 + (normalized_diff / 30) * 30  # 70~100점 사이 분포
+        feedback = "아웃포커싱 분석\n아웃포커싱 효과를 조금 더 강화하면 좋겠습니다. 심도를 약간 더 높이거나 배경과의 거리를 더 확보해보세요."
     else:
-        print("아웃포커싱 분석\n아웃포커싱 피드백: 아웃포커싱이 적절합니다")
-        feedback = "아웃포커싱이 적절합니다."
+        # 아웃포커싱이 과도한 경우
+        score = 70 + ((100 - normalized_diff) / 20) * 30  # 70~100점 사이 분포
+        feedback = "아웃포커싱 분석\n아웃포커싱이 약간 과하니 심도를 조금 낮추거나 배경과의 거리를 줄여보세요."
+
+    score = max(70, min(100, score))  # 최소 70점, 최대 100점으로 제한
+    print(f"아웃포커싱 점수: {score:.1f}")
+    print(f"아웃포커싱 피드백: {feedback}")
     
     return score, feedback
 
@@ -523,7 +534,7 @@ def resize_image(image, max_size=1280):
     
     print("이미지 크기가 적절하여 리사이징이 필요하지 않습니다.")
     return image
-    
+
 def process_single_detection(image, det, face_detection):
     """
     단일 인물 검출 결과를 처리하는 함수

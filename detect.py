@@ -430,6 +430,10 @@ def combine_evaluation_results(measurements: dict, scores_and_feedbacks: list) -
     # 총점 계산
     total_score = sum(score * weights[category] 
                      for category, score in scores.items())
+
+    # 총점 출력
+    print("\n=== 최종 평가 결과 ===")
+    print(f"총점: {total_score:.1f}/100")
     
     # 측정값들을 문자열로 변환
     more_info = ", ".join([f"{k}: {v}" for k, v in measurements.items()])

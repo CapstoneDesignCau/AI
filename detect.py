@@ -762,44 +762,74 @@ def run(
             else:
                 p, im0, frame = path, im0s.copy(), getattr(dataset, 'frame', 0)
 
-            p = Path(p)
-            save_path = str(save_dir / p.name)
-            txt_path = str(save_dir / 'labels' / p.stem) + ('' if dataset.mode == 'image' else f'_{frame}')
-            s += '%gx%g ' % im.shape[2:]
-            
             if len(det):
                 # Rescale boxes from img_size to im0 size
-                det[:, :4] = scale_boxes(im.shape[2:], det[:, :4], im0.shape).round()
+                det = scale_boxes(im.shape[2:], det, im0.shape).round()
 
-                for *xyxy, conf, cls in reversed(det):
-                    if int(cls) == 0:  # person class
-                        # Face detection
-                        gray = cv2.cvtColor(im0, cv2.COLOR_BGR2GRAY)
-                        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
-                        
-                        if len(faces) > 0:
-                            # 첫 번째 감지된 얼굴에 대해 평가 수행
-                            result = process_single_detection(im0, xyxy, faces[0])
-                            
-                            if view_img:  # 시각화가 필요한 경우
-                                annotator = Annotator(im0, line_width=line_thickness, example=str(names))
-                                # 인물 박스 그리기
-                                c = int(cls)
-                                label = None if hide_labels else (names[c] if hide_conf else f'{names[c]} {conf:.2f}')
-                                annotator.box_label(xyxy, label, color=colors(c, True))
-                                # 얼굴 박스 그리기
-                                x, y, w, h = faces[0]
-                                cv2.rectangle(im0, (x, y), (x + w, y + h), (255, 0, 0), 2)
-                                
-                                # 결과 표시
-                                if platform.system() == 'Linux' and p not in windows:
-                                    windows.append(p)
-                                    cv2.namedWindow(str(p), cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
-                                    cv2.resizeWindow(str(p), im0.shape[1], im0.shape[0])
-                                cv2.imshow(str(p), im0)
-                                cv2.waitKey(10000)
-                            
-                            return result
+                # 사람 객체만 필터링 (클래스 0이 person)
+                person_dets = det[det[:, -1] == 0]  # person class = 0
+
+                if len(person_dets) > 1:
+                    print(f"\n경고: {len(person_dets)}명의 사람이 감지되었습니다. 가장 큰 영역의 인물을 분석합니다.")
+                    # CUDA 텐서를 CPU로 옮기고 NumPy로 변환
+                    person_dets_cpu = person_dets.cpu().numpy()
+                    areas = (person_dets_cpu[:, 2] - person_dets_cpu[:, 0]) * (person_dets_cpu[:, 3] - person_dets_cpu[:, 1])
+                    main_person_idx = areas.argmax()
+                    person_det = person_dets_cpu[main_person_idx]
+                elif len(person_dets) == 1:
+                    person_det = person_dets[0].cpu().numpy()
+                else:
+                    continue
+                
+                # Face detection
+                gray = cv2.cvtColor(im0, cv2.COLOR_BGR2GRAY)
+                faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+                
+                if len(faces) > 1:
+                    print(f"\n경고: {len(faces)}개의 얼굴이 감지되었습니다. 주요 인물과 가장 가까운 얼굴을 선택합니다.")
+                    # 주요 인물의 중심점
+                    person_center = [(person_det[0] + person_det[2])/2, (person_det[1] + person_det[3])/2]
+
+                    # 각 얼굴의 중심점과 주요 인물과의 거리 계산
+                    distances = []
+                    for (x, y, w, h) in faces:
+                        face_center = [x + w/2, y + h/2]
+                        dist = np.sqrt((face_center[0] - person_center[0])**2 + 
+                                      (face_center[1] - person_center[1])**2)
+                        distances.append(dist)
+
+                    # 가장 가까운 얼굴 선택
+                    main_face_idx = np.argmin(distances)
+                    main_face = faces[main_face_idx]
+                elif len(faces) == 1:
+                    main_face = faces[0]
+                else:
+                    print("\n경고: 얼굴이 감지되지 않았습니다.")
+                    continue
+
+                # 선택된 인물과 얼굴로 분석 진행
+                result = process_single_detection(im0, person_det, main_face)
+                
+                if view_img:
+                    # 시각화 코드
+                    annotator = Annotator(im0, line_width=line_thickness, example=str(names))
+                    # 선택된 인물 박스 그리기
+                    c = int(person_det[-1])
+                    label = None if hide_labels else (names[c] if hide_conf else f'{names[c]} {person_det[4]:.2f}')
+                    annotator.box_label(person_det[:4], label, color=colors(c, True))
+                    # 선택된 얼굴 박스 그리기
+                    x, y, w, h = main_face
+                    cv2.rectangle(im0, (x, y), (x + w, y + h), (255, 0, 0), 2)
+                    
+                    # 결과 표시
+                    if platform.system() == 'Linux' and p not in windows:
+                        windows.append(p)
+                        cv2.namedWindow(str(p), cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
+                        cv2.resizeWindow(str(p), im0.shape[1], im0.shape[0])
+                    cv2.imshow(str(p), im0)
+                    cv2.waitKey(10000)
+
+                return result
 
     # 인물이 감지되지 않은 경우
     return {

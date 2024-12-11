@@ -786,21 +786,26 @@ def run(
                 faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
                 
                 if len(faces) > 1:
-                    print(f"\n경고: {len(faces)}개의 얼굴이 감지되었습니다. 주요 인물과 가장 가까운 얼굴을 선택합니다.")
-                    # 주요 인물의 중심점
-                    person_center = [(person_det[0] + person_det[2])/2, (person_det[1] + person_det[3])/2]
-
-                    # 각 얼굴의 중심점과 주요 인물과의 거리 계산
+                    print(f"\n경고: {len(faces)}개의 얼굴이 감지되었습니다. 주요 인물의 상단과 가장 가까운 얼굴을 선택합니다.")
+                    
+                    # 주요 인물의 상단 y좌표
+                    person_top = person_det[1]  # y1 좌표
+                    
+                    # 각 얼굴의 하단 y좌표와 주요 인물 상단과의 거리 계산
                     distances = []
                     for (x, y, w, h) in faces:
-                        face_center = [x + w/2, y + h/2]
-                        dist = np.sqrt((face_center[0] - person_center[0])**2 + 
-                                      (face_center[1] - person_center[1])**2)
+                        face_bottom = y + h  # 얼굴 바운딩 박스의 하단 y좌표
+                        # 수직 거리만 계산
+                        dist = abs(face_bottom - person_top)
                         distances.append(dist)
-
+                    
                     # 가장 가까운 얼굴 선택
                     main_face_idx = np.argmin(distances)
                     main_face = faces[main_face_idx]
+                    
+                    # 선택된 얼굴의 정보 출력
+                    x, y, w, h = main_face
+                    print(f"선택된 얼굴 위치: 상단({y}), 하단({y+h}), 주요 인물 상단({person_top})")
                 elif len(faces) == 1:
                     main_face = faces[0]
                 else:

@@ -267,20 +267,17 @@ def calculate_exposure(image, person_bbox, face_bbox):
         print("배경의 노출이 적절합니다.")
         feedback_list.append("배경의 노출이 적절합니다.")
     
-    # 최종 점수와 피드백
-    score = max(0, score)
-    print(f"\n노출 점수: {score:.1f}")
-    
-    if score == 100:
-        final_feedback = "노출 분석\n전체적인 노출이 매우 적절합니다."
-        print("\n노출 피드백: 전체적인 노출이 매우 적절합니다")
-    elif len(feedback_list) > 1:
-        final_feedback = "\n".join(feedback_list)
-    else:
-        final_feedback = "전체적인 노출이 적절합니다."
-        print("\n노출 피드백: 노출이 전체적으로 적절합니다")
-    
-    return score, final_feedback
+        # 최종 점수와 피드백
+        score = max(0, score)
+        print(f"\n노출 점수: {score:.1f}")
+        
+        if score == 100:
+            final_feedback = "노출 분석\n전체적인 노출이 매우 적절합니다."
+            print("\n노출 피드백: 전체적인 노출이 매우 적절합니다")
+        else:
+            final_feedback = "노출 분석\n" + "\n".join(feedback_list[1:])  # 첫 번째 "노출 분석" 제외
+        
+        return score, final_feedback
 
 def calculate_color_balance(image, person_bbox, face_bbox):
     """
@@ -387,12 +384,17 @@ def calculate_color_balance(image, person_bbox, face_bbox):
     elif clothing_bg_saturation_diff_pct > 15:
         feedbacks.append("의상과 배경의 채도 차이가 커서 색이 많이 강조됩니다. 이 경우 배경의 채도를 조금 낮추거나, 의상의 색감을 더 자연스럽게 만들어 조화를 이룰 수 있습니다.")
 
-    # 피드백 출력 추가
+    # 피드백 결합
+    if len(feedbacks) > 1:
+        final_feedback = feedbacks[0] + "\n" + "\n".join([fb for fb in feedbacks[1:] if fb])  # 첫 번째 "명도 채도 분석" 유지
+    else:
+        final_feedback = "명도 채도 분석\n전체적인 색감이 적절합니다."
+    
+    # 피드백 출력
     print("\n피드백:")
-    for i, fb in enumerate(feedbacks, 1):
-        print(f"{i}. {fb}")
-
-    return score, feedbacks
+    print(final_feedback)
+    
+    return score, final_feedback
 
 def combine_evaluation_results(measurements: dict, scores_and_feedbacks: list) -> dict:
     """

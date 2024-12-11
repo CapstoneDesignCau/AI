@@ -488,7 +488,7 @@ def process_image(image_url):
     except Exception as e:
         return {
             "totalScore": 0,
-            "feedback": [[1, f"이미지 처리 중 오류가 발생했습니다: {str(e)}"]],
+            "feedback": [[-1, f"이미지 처리 중 오류가 발생했습니다: {str(e)}"]],
             "moreInfo": "처리 실패"
         }
 
@@ -830,7 +830,7 @@ def run(
     # 인물이 감지되지 않은 경우
     return {
         "totalScore": 0,
-        "feedback": [[1, "인물이 감지되지 않았습니다. 전신이 모두 나오도록 촬영해주세요."]],
+        "feedback": [[-1, "인물이 감지되지 않았습니다. 전신이 모두 나오도록 촬영해주세요."]],
         "moreInfo": "인물 감지 실패"
     }
 

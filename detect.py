@@ -173,17 +173,6 @@ def analyze_focus_difference(image, person_bbox, face_bbox):
     return score, feedback
 
 def calculate_exposure(image, person_bbox, face_bbox):
-    """
-    노출과 채도를 분석하는 함수
-    
-    Args:
-        image: 원본 이미지
-        person_bbox: 인물 바운딩 박스 (x1, y1, x2, y2)
-        face_bbox: 얼굴 바운딩 박스 (x, y, w, h)
-    
-    Returns:
-        (score, feedback) 튜플
-    """
     print("\n노출 분석")
     
     x1, y1, x2, y2 = person_bbox
@@ -206,12 +195,6 @@ def calculate_exposure(image, person_bbox, face_bbox):
     face_brightness = np.mean(v_channel[face_mask == 255])
     clothing_brightness = np.mean(v_channel[clothing_mask == 255])
     background_brightness = np.mean(v_channel[mask == 0])
-    
-    # 채도(S) 분석
-    s_channel = hsv_image[:, :, 1]
-    face_saturation = np.mean(s_channel[face_mask == 255])
-    clothing_saturation = np.mean(s_channel[clothing_mask == 255])
-    background_saturation = np.mean(s_channel[mask == 0])
     
     # 점수 계산
     score = 100.0
@@ -239,6 +222,7 @@ def calculate_exposure(image, person_bbox, face_bbox):
         print(feedback)
     else:
         print("얼굴의 노출이 적절합니다.")
+        feedback_list.append("얼굴의 노출이 적절합니다.")
     
     # 의상 노출 분석
     if clothing_brightness < 50:
@@ -260,6 +244,7 @@ def calculate_exposure(image, person_bbox, face_bbox):
         print(feedback)
     else:
         print("의상의 노출이 적절합니다.")
+        feedback_list.append("의상의 노출이 적절합니다.")
     
     # 배경 노출 분석
     if background_brightness < 50:
@@ -280,12 +265,16 @@ def calculate_exposure(image, person_bbox, face_bbox):
         print(feedback)
     else:
         print("배경의 노출이 적절합니다.")
+        feedback_list.append("배경의 노출이 적절합니다.")
     
     # 최종 점수와 피드백
     score = max(0, score)
     print(f"\n노출 점수: {score:.1f}")
     
-    if feedback_list:
+    if score == 100:
+        final_feedback = "노출 분석\n전체적인 노출이 매우 적절합니다."
+        print("\n노출 피드백: 전체적인 노출이 매우 적절합니다")
+    elif len(feedback_list) > 1:
         final_feedback = "\n".join(feedback_list)
     else:
         final_feedback = "전체적인 노출이 적절합니다."

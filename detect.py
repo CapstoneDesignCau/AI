@@ -309,86 +309,91 @@ def calculate_exposure(image, person_bbox, face_bbox):
 
 def calculate_color_balance(image, person_bbox, face_bbox):
     """
-    색상 균형을 분석하는 함수
-    
+    Function to analyze color balance
+
     Args:
-        image: 원본 이미지
-        person_bbox: 인물 바운딩 박스 (x1, y1, x2, y2)
-        face_bbox: 얼굴 바운딩 박스 (x, y, w, h)
-    
+        image: original image
+        person_bbox: Person bounding box (x1, y1, x2, y2)
+        face_bbox: Face bounding box (x, y, w, h)
+
     Returns:
-        (score, feedback) 튜플
+        (score, feedback) tuple
     """
-    print("\n색상 균형 분석")
-    
+    print("\nColor balance analysis")
+
     x1, y1, x2, y2 = person_bbox
     face_x, face_y, face_w, face_h = face_bbox
-    
-    # 마스크 생성
+
+    # Create mask
     mask = np.zeros(image.shape[:2], dtype=np.uint8)
     mask[y1:y2, x1:x2] = 255
-    
+
     face_mask = np.zeros(image.shape[:2], dtype=np.uint8)
     face_mask[face_y:face_y+face_h, face_x:face_x+face_w] = 255
-    
+
     clothing_mask = cv2.bitwise_and(mask, cv2.bitwise_not(face_mask))
 
-    # BGR 이미지를 HSV로 변환
+    # Convert BGR image to HSV
     hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    
-    # V (명도) 채널에서 명도 계산
+
+    # Calculate brightness in V (brightness) channel
     v_channel = hsv_image[:, :, 2]
-    face_brightness = np.mean(v_channel[face_mask == 255])  # 얼굴 영역의 명도 평균
-    clothing_brightness = np.mean(v_channel[clothing_mask == 255])  # 의상 영역의 명도 평균
-    background_brightness = np.mean(v_channel[mask == 0])  # 배경 영역의 명도 평
-    # S (채도) 채널에서 채도 계산
+    face_brightness = np.mean(v_channel[face_mask == 255])
+    clothing_brightness = np.mean(v_channel[clothing_mask == 255])
+    background_brightness = np.mean(v_channel[mask == 0])
+
+    # Calculate saturation in S (saturation) channel
     s_channel = hsv_image[:, :, 1]
-    face_saturation = np.mean(s_channel[face_mask == 255])  # 얼굴 영역의 채도 평균
-    clothing_saturation = np.mean(s_channel[clothing_mask == 255])  # 의상 영역의 채도 평균
-    background_saturation = np.mean(s_channel[mask == 0])  # 배경 영역의 채도 평
-    # 결과 출력
+    face_saturation = np.mean(s_channel[face_mask == 255])
+    clothing_saturation = np.mean(s_channel[clothing_mask == 255])
+    background_saturation = np.mean(s_channel[mask == 0])
+
+    # Output results
     print(f"Face brightness: {face_brightness}")
     print(f"Clothing brightness: {clothing_brightness}")
     print(f"Background brightness: {background_brightness}")
     print(f"Face saturation: {face_saturation}")
     print(f"Clothing saturation: {clothing_saturation}")
     print(f"Background saturation: {background_saturation}")
-    # 얼굴과 의상 간의 명도 차이 계산 (0~255 범위)
-    face_clothing_diff = abs(face_brightness - clothing_brightness)
-    face_bg_diff = abs(face_brightness - background_brightness)
-    clothing_bg_diff = abs(clothing_brightness - background_brightness)
-    # 얼굴과 의상 간의 채도 차이 계산 (0~255 범위)
+
+    # Calculate the differences
+    face_clothing_brightness_diff = abs(face_brightness - clothing_brightness)
+    face_bg_brightness_diff = abs(face_brightness - background_brightness)
+    clothing_bg_brightness_diff = abs(clothing_brightness - background_brightness)
+
     face_clothing_saturation_diff = abs(face_saturation - clothing_saturation)
     face_bg_saturation_diff = abs(face_saturation - background_saturation)
     clothing_bg_saturation_diff = abs(clothing_saturation - background_saturation)
-    # 명도 차이를 퍼센트로 변환
-    face_clothing_diff_pct = (face_clothing_diff / 255) * 100
-    face_bg_diff_pct = (face_bg_diff / 255) * 100
-    clothing_bg_diff_pct = (clothing_bg_diff / 255) * 10
-    # 채도 차이를 퍼센트로 변환
+
+    # Convert differences to percentages based on typical ranges
+    face_clothing_diff_pct = (face_clothing_brightness_diff / 255) * 100
+    face_bg_diff_pct = (face_bg_brightness_diff / 255) * 100
+    clothing_bg_diff_pct = (clothing_bg_brightness_diff / 255) * 100
+
     face_clothing_saturation_diff_pct = (face_clothing_saturation_diff / 255) * 100
     face_bg_saturation_diff_pct = (face_bg_saturation_diff / 255) * 100
-    clothing_bg_saturation_diff_pct = (clothing_bg_saturation_diff / 255) * 10
+    clothing_bg_saturation_diff_pct = (clothing_bg_saturation_diff / 255) * 100
+
     print(f"Face-Clothing brightness difference: {face_clothing_diff_pct:.2f}%")
     print(f"Face-Background brightness difference: {face_bg_diff_pct:.2f}%")
     print(f"Clothing-Background brightness difference: {clothing_bg_diff_pct:.2f}%")
     print(f"Face-Clothing saturation difference: {face_clothing_saturation_diff_pct:.2f}%")
     print(f"Face-Background saturation difference: {face_bg_saturation_diff_pct:.2f}%")
     print(f"Clothing-Background saturation difference: {clothing_bg_saturation_diff_pct:.2f}%")
-    
-    # 점수 계산
+
+    # Calculate score
     score = 100.0
-    feedbacks = ["명도 채도 분석"]  # feedbacks 리스트 초기화
-    
-    # 의상과 배경의 명도 차이 피드백
+    feedbacks = ["명도 채도 분석"]
+
+    # Feedback on brightness difference between clothing and background
     if clothing_bg_diff_pct < 10:
         feedbacks.append("의상과 배경의 명도 차이가 적어, 피사체와 배경의 구분이 명확하지 않습니다. 의상 색상을 더 밝은 색으로 선택하거나 배경의 명도를 낮춰 보세요.")
     elif 10 <= clothing_bg_diff_pct <= 30:
         feedbacks.append("의상과 배경의 명도 차이가 적당하여 피사체가 잘 부각됩니다. 현재 상태는 잘 조화된 이미지입니다.")
     elif clothing_bg_diff_pct > 30:
         feedbacks.append("의상과 배경의 명도 차이가 커서 피사체가 배경에서 과도하게 강조됩니다. 의상 색상을 조금 더 어두운 톤으로 선택하거나 배경을 흐리게 하여 조화롭게 만들 수 있습니다.")
-    
-    # 의상과 배경의 채도 차이 피드백
+
+    # Feedback on saturation difference between clothing and background
     if clothing_bg_saturation_diff_pct < 5:
         feedbacks.append("의상과 배경의 채도가 비슷하여 색감이 너무 평범하게 느껴질 수 있습니다. 의상 색감을 좀 더 뚜렷하게 강조하거나, 배경을 흐리게 하여 더 두드러지게 만들 수 있습니다. 또한, 배경의 채도를 조금 낮추어 의상이 더욱 눈에 띄게 할 수 있습니다.")
     elif 5 <= clothing_bg_saturation_diff_pct <= 15:
@@ -396,27 +401,21 @@ def calculate_color_balance(image, person_bbox, face_bbox):
     elif clothing_bg_saturation_diff_pct > 15:
         feedbacks.append("의상과 배경의 채도 차이가 커서 색이 많이 강조됩니다. 이 경우 배경의 채도를 조금 낮추거나, 의상의 색감을 더 자연스럽게 만들어 조화를 이룰 수 있습니다.")
 
-    # 명도 차이에 따른 점수 조정
+    # Adjust scores
     if clothing_bg_diff_pct < 10 or clothing_bg_diff_pct > 30:
         score -= 10
-        
-    # 채도 차이에 따른 점수 조정
     if clothing_bg_saturation_diff_pct < 5 or clothing_bg_saturation_diff_pct > 15:
         score -= 10
-    
-    # 최소 점수 제한
+
+    # Minimum score limit
     score = max(60, score)
 
-    # 피드백 결합
-    if len(feedbacks) > 1:
-        final_feedback = feedbacks[0] + "\n" + "\n".join([fb for fb in feedbacks[1:] if fb])  # 첫 번째 "명도 채도 분석" 유지
-    else:
-        final_feedback = "명도 채도 분석\n전체적인 색감이 적절합니다."
-    
-    # 피드백 출력
-    print("\n피드백:")
+    # Combine feedback
+    final_feedback = "\n".join(feedbacks)
+
+    print("\nFeedback:")
     print(final_feedback)
-    
+
     return score, final_feedback
 
 def combine_evaluation_results(measurements: dict, scores_and_feedbacks: list) -> dict:

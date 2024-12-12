@@ -65,11 +65,11 @@ def calculate_height_ratio_score(person_height_ratio):
         elif background_lower_highlight <= person_height_ratio < background_upper_highlight:
             difference = background_upper_highlight - person_height_ratio
             penalty = min(difference * 2, 100)
-            feedback = "비율 분석\n인물이 차지하는 비율이 애매합니다. 배경을 강조하고 싶다면 인물을 조금 더 작게, 인물을 강조하고 싶다면 인물을 조금 더 크게 찍어보세요."
-        elif person_height_ratio < ideal_max:
-            difference = ideal_max - person_height_ratio
+            feedback = "비율 분석\n인물이 차지하는 비율이 40~60% 구간에 있습니다. 배경을 강조하고 싶다면 적절하지만, 인물을 강조하고 싶다면 조금 더 크게 찍어보세요."
+        elif person_height_ratio < ideal_min:
+            difference = ideal_min - person_height_ratio
             penalty = min(difference * 2, 100)
-            feedback = "비율 분석\n 인물이 차지하는 비율이 적절합니다."
+            feedback = "비율 분석\n인물이 차지하는 비율이 애매합니다. 배경을 강조하고 싶다면 인물을 조금 더 작게, 인물을 강조하고 싶다면 인물을 조금 더 크게 찍어보세요."
         else:
             difference = person_height_ratio - ideal_max
             penalty = min(difference * 2, 100)

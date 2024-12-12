@@ -49,6 +49,8 @@ def calculate_height_ratio_score(person_height_ratio):
     print(f"\n전신/이미지 비율: {person_height_ratio:.1f}%")
     ideal_min = 65.0
     ideal_max = 85.0
+    background_lower_highlight = 40.0
+    background_upper_highlight = 60.0
     
     if ideal_min <= person_height_ratio <= ideal_max:
         score = 100.0
@@ -56,10 +58,18 @@ def calculate_height_ratio_score(person_height_ratio):
         print("인물이 차지하는 비율이 적절합니다.")
         feedback = "비율 분석\n인물이 차지하는 비율이 적절합니다."
     else:
-        if person_height_ratio < ideal_min:
-            difference = ideal_min - person_height_ratio
+        if person_height_ratio < background_lower_highlight:
+            difference = background_lower_highlight - person_height_ratio
             penalty = min(difference * 2, 100)
-            feedback = "비율 분석\n인물이 차지하는 비율이 너무 적습니다. 조금 더 가까이에서 촬영해보세요. (65% ~ 85% 사이를 추천드립니다.)"
+            feedback = "비율 분석\n인물이 차지하는 비율이 너무 적습니다. 조금 더 가까이에서 촬영해보세요."
+        elif background_lower_highlight <= person_height_ratio < background_upper_highlight:
+            difference = background_upper_highlight - person_height_ratio
+            penalty = min(difference * 2, 100)
+            feedback = "비율 분석\n인물이 차지하는 비율이 애매합니다. 배경을 강조하고 싶다면 인물을 조금 더 작게, 인물을 강조하고 싶다면 인물을 조금 더 크게 찍어보세요."
+        elif person_height_ratio < ideal_max:
+            difference = ideal_max - person_height_ratio
+            penalty = min(difference * 2, 100)
+            feedback = "비율 분석\n 인물이 차지하는 비율이 적절합니다."
         else:
             difference = person_height_ratio - ideal_max
             penalty = min(difference * 2, 100)
@@ -100,28 +110,46 @@ def calculate_thirds_score(image_width, image_height, person_center_x):
 
 def calculate_vertical_position_score(image_height, face_center_y, feet_y, head_y):
     print("\n수직 위치 분석")
-    image_center_y = image_height / 2
-    face_center_distance = abs(face_center_y - image_center_y)
-    face_center_ratio = face_center_distance / image_height
     
+    # 얼굴 중심의 상대적 위치를 퍼센트로 계산 (0% = 상단, 100% = 하단)
+    face_vertical_percentage = (face_center_y / image_height) * 100
+    
+    # 발끝의 프레임 하단과의 거리 비율 계산
     feet_distance = abs(feet_y - image_height)
     feet_ratio = feet_distance / image_height
     
-    face_penalty = min(face_center_ratio * 200, 50)
-    feet_penalty = min(feet_ratio * 200, 50)
+    # 얼굴 위치에 따른 점수 계산 (40~60% 구간이 만점)
+    if 40 <= face_vertical_percentage <= 60:
+        face_score = 100
+    else:
+        # 40% 미만이거나 60% 초과인 경우, 거리에 따라 감점
+        if face_vertical_percentage < 40:
+            distance_from_ideal = 40 - face_vertical_percentage
+        else:
+            distance_from_ideal = face_vertical_percentage - 60
+        face_penalty = min(distance_from_ideal * 2, 50)  # 최대 50점 감점
+        face_score = 100 - face_penalty
     
-    total_penalty = face_penalty + feet_penalty
-    score = max(0, 100.0 - total_penalty)
+    # 발끝 위치에 따른 감점
+    feet_penalty = min(feet_ratio * 200, 50)  # 최대 50점 감점
+    
+    # 최종 점수 계산
+    score = max(0, min(face_score - feet_penalty, 100))
     print(f"수직 위치 점수: {score:.1f}")
     
+    # 피드백 생성
     if score >= 80:
         print("수직 위치 피드백: 인물의 수직 위치가 적절합니다")
-        feedback = "수직 위치 분석\n인물의 수직 위치가 적절합니다.(얼굴은 중앙, 발은 프레임 아래)"
-    elif feet_ratio > 0.1:
-        feedback = "수직 위치 분석\n발이 프레임 아래쪽에 더 가깝게 위치하도록 구도를 잡아보세요"
-        print(f"수직 위치 피드백: {feedback}")
+        feedback = "수직 위치 분석\n인물의 수직 위치가 적절합니다.(얼굴은 중앙 40~60% 구간, 발은 프레임 아래)"
     else:
-        feedback = "수직 위치 분석\n얼굴이 화면 중앙에 오도록 구도를 조정해보세요"
+        if face_vertical_percentage < 40:
+            feedback = "수직 위치 분석\n얼굴이 너무 위쪽에 있습니다. 배경을 강조하고 싶다면, 얼굴이 화면 중앙 부근(40~60%)에 오도록 구도를 조정해보세요"
+        elif face_vertical_percentage > 60:
+            feedback = "수직 위치 분석\n얼굴이 너무 아래쪽에 있습니다. 얼굴이 화면 중앙 부근(40~60%)에 오도록 구도를 조정해보세요"
+        
+        if feet_ratio > 0.1:
+            feedback += "\n발이 프레임 아래쪽에 더 가깝게 위치하도록 구도를 잡아보세요"
+        
         print(f"수직 위치 피드백: {feedback}")
     
     return score, feedback
@@ -362,7 +390,7 @@ def calculate_color_balance(image, person_bbox, face_bbox):
 
     # 의상과 배경의 명도 차이 피드백
     if clothing_bg_diff_pct < 10:
-        feedbacks.append("의상과 배경의 명도 차이가 적어, 피사체가 배경에 자연스럽게 녹아듭니다. 의상 색상을 더 밝은 색으로 선택하거나 배경의 명도를 낮춰 보세요. 'Exposure Compensation' 기능을 사용하여 배경의 밝기를 낮추거나, 의상에 채도를 높여 대비를 강화할 수 있습니다.")
+        feedbacks.append("의상과 배경의 명도 차이가 적어, 피사체와 배경의 구분이 명확하지 않습니다. 의상 색상을 더 밝은 색으로 선택하거나 배경의 명도를 낮춰 보세요. 'Exposure Compensation' 기능을 사용하여 배경의 밝기를 낮추거나, 의상에 채도를 높여 대비를 강화할 수 있습니다.")
     elif 10 <= clothing_bg_diff_pct <= 30:
         feedbacks.append("의상과 배경의 명도 차이가 적당하여 피사체가 잘 부각됩니다. 현재 상태는 잘 조화된 이미지입니다. 하지만, 배경의 색상을 조금 더 차분하게 만들거나, 의상의 채도를 높여서 색감의 강렬함을 조절하는 방법을 고려할 수 있습니다.")
     elif clothing_bg_diff_pct > 30:
@@ -412,24 +440,13 @@ def calculate_color_balance(image, person_bbox, face_bbox):
     return score, final_feedback
 
 def combine_evaluation_results(measurements: dict, scores_and_feedbacks: list) -> dict:
-    """
-    평가 결과들을 합치고 최종 형식으로 변환하는 함수
-    
-    Args:
-        measurements: 측정값들을 담은 딕셔너리
-        scores_and_feedbacks: (score, feedback) 튜플들의 리스트
-    
-    Returns:
-        API 응답 형식에 맞는 최종 결과 딕셔너리
-    """
-    # 가중치 설정
+    # 가중치 설정 수정
     weights = {
-        'ratio': 0.2,       # 등신 비율
-        'height': 0.15,     # 전신 비율
-        'composition': 0.25,  # 구도
-        'vertical': 0.05,   # 수직 위치
-        'focus': 0.1,      # 아웃포커싱
-        'exposure': 0.1,        # 노출
+        'ratio': 0.2,          # 등신 비율
+        'position': 0.2,       # 전신/수직 위치 통합
+        'composition': 0.25,   # 구도
+        'focus': 0.1,         # 아웃포커싱
+        'exposure': 0.1,       # 노출
         'color_balance': 0.15  # 색상 균형
     }
     
@@ -438,19 +455,42 @@ def combine_evaluation_results(measurements: dict, scores_and_feedbacks: list) -
     feedbacks = []
     feedback_id = 1
     
-    for category, (score, feedback) in zip(weights.keys(), scores_and_feedbacks):
-        scores[category] = score
+    # 점수와 피드백 분리
+    for category, (score, feedback) in zip(['ratio', 'height', 'composition', 'vertical', 'focus', 'exposure', 'color_balance'], scores_and_feedbacks):
+        if category not in ['height', 'vertical']:  # height와 vertical은 따로 처리
+            scores[category] = score
         if feedback is not None:
             feedbacks.append([feedback_id, feedback])
             feedback_id += 1
     
+    # height와 vertical 점수 중 높은 점수 선택
+    position_score = max(scores_and_feedbacks[1][0], scores_and_feedbacks[3][0])  # height와 vertical의 점수 비교
+    scores['position'] = position_score
+    
     # 총점 계산
-    total_score = sum(score * weights[category] 
-                     for category, score in scores.items())
-
+    total_score = (
+        scores['ratio'] * weights['ratio'] +
+        scores['position'] * weights['position'] +
+        scores['composition'] * weights['composition'] +
+        scores['focus'] * weights['focus'] +
+        scores['exposure'] * weights['exposure'] +
+        scores['color_balance'] * weights['color_balance']
+    )
+    
     # 총점 출력
     print("\n=== 최종 평가 결과 ===")
     print(f"총점: {total_score:.1f}/100")
+    print("\n개별 점수:")
+    print(f"등신 비율: {scores['ratio']:.1f} (가중치: {weights['ratio']*100}%)")
+    print(f"위치 점수(전신/수직 중 높은 점수): {scores['position']:.1f} (가중치: {weights['position']*100}%)")
+    print(f"구도: {scores['composition']:.1f} (가중치: {weights['composition']*100}%)")
+    print(f"아웃포커싱: {scores['focus']:.1f} (가중치: {weights['focus']*100}%)")
+    print(f"노출: {scores['exposure']:.1f} (가중치: {weights['exposure']*100}%)")
+    print(f"색상 균형: {scores['color_balance']:.1f} (가중치: {weights['color_balance']*100}%)")
+    
+    # 가중치 합계 확인
+    weight_sum = sum(weights.values())
+    print(f"\n가중치 합계: {weight_sum:.2f}")
     
     # 측정값들을 문자열로 변환
     more_info = ", ".join([f"{k}: {v}" for k, v in measurements.items()])
@@ -458,6 +498,15 @@ def combine_evaluation_results(measurements: dict, scores_and_feedbacks: list) -
     # 최종 결과 형식 구성
     final_result = {
         "totalScore": round(total_score, 1),
+        "detailedScores": {
+            "ratio": scores['ratio'],
+            "position": scores['position'],
+            "composition": scores['composition'],
+            "focus": scores['focus'],
+            "exposure": scores['exposure'],
+            "color_balance": scores['color_balance']
+        },
+        "weights": weights,
         "feedback": feedbacks,
         "moreInfo": more_info
     }

@@ -380,14 +380,6 @@ def calculate_color_balance(image, person_bbox, face_bbox):
     score = 100.0
     feedbacks = ["명도 채도 분석"]  # feedbacks 리스트 초기화
     
-    # 얼굴과 의상의 명도 차이 피드백
-    if face_clothing_diff_pct < 5:
-        feedbacks.append("얼굴과 의상의 명도 차이가 매우 적어, 얼굴이 잘 부각되지 않을 수 있습니다. 의상을 조금 더 밝은 색으로 선택하거나, 얼굴의 명도를 조금 더 높이면 좋습니다. 화이트 밸런스를 조정하거나 노출 보정을 통해 얼굴의 밝기를 높여 보세요. 또한, 얼굴의 명도를 높이는 방법으로 하이라이트를 조정하거나, 디지털 편집 프로그램에서 'Brightness/Contrast' 기능을 사용해보는 것도 좋은 방법입니다.")
-    elif 5 <= face_clothing_diff_pct <= 15:
-        feedbacks.append("얼굴과 의상의 명도 차이가 적당하여 얼굴이 자연스럽게 부각됩니다. 이 상태는 매우 자연스럽습니다.")
-    elif face_clothing_diff_pct > 15:
-        feedbacks.append("얼굴과 의상의 명도 차이가 커서 얼굴이 잘 부각됩니다. 그러나 너무 강조될 수 있으므로 의상의 명도를 조금 낮추거나, 얼굴의 위치를 조금 바꿔서 자연스럽게 만들 수 있습니다.")
-
     # 의상과 배경의 명도 차이 피드백
     if clothing_bg_diff_pct < 10:
         feedbacks.append("의상과 배경의 명도 차이가 적어, 피사체와 배경의 구분이 명확하지 않습니다. 의상 색상을 더 밝은 색으로 선택하거나 배경의 명도를 낮춰 보세요.")
@@ -396,14 +388,6 @@ def calculate_color_balance(image, person_bbox, face_bbox):
     elif clothing_bg_diff_pct > 30:
         feedbacks.append("의상과 배경의 명도 차이가 커서 피사체가 배경에서 과도하게 강조됩니다. 의상 색상을 조금 더 어두운 톤으로 선택하거나 배경을 흐리게 하여 조화롭게 만들 수 있습니다.")
     
-    # 얼굴과 의상의 채도 차이 피드백
-    if face_clothing_saturation_diff_pct < 5:
-        feedbacks.append("얼굴과 의상의 채도가 비슷하여 색감이 너무 단조로워 보일 수 있습니다. 의상을 조금 더 채도가 높은 색으로 선택하거나 얼굴에 약간의 채도를 추가해 보세요. 채도를 높이기 위해 'Saturation' 슬라이더를 오른쪽으로 이동시키거나, 'Vibrance'로 자연스럽게 색감을 강조할 수 있습니다.")
-    elif 5 <= face_clothing_saturation_diff_pct <= 15:
-        feedbacks.append("얼굴과 의상의 채도 차이가 적당하여 색감이 자연스럽게 맞아떨어집니다. 이 상태는 매우 균형 잡힌 이미지입니다. 그러나 배경과 의상의 색상을 대비시켜 강렬한 이미지를 만들고 싶다면 의상의 채도를 조금 더 높여 보세요.")
-    elif face_clothing_saturation_diff_pct > 15:
-        feedbacks.append("얼굴과 의상의 채도 차이가 커서 색이 많이 강조됩니다. 배경의 색감을 살짝 조정하여 전체적인 색 균형을 맞추거나, 의상 색상을 조금 더 자연스럽게 만들기 위해 'Saturation' 슬라이더를 낮추는 것도 좋습니다.")
-
     # 의상과 배경의 채도 차이 피드백
     if clothing_bg_saturation_diff_pct < 5:
         feedbacks.append("의상과 배경의 채도가 비슷하여 색감이 너무 평범하게 느껴질 수 있습니다. 의상 색감을 좀 더 뚜렷하게 강조하거나, 배경을 흐리게 하여 더 두드러지게 만들 수 있습니다. 또한, 배경의 채도를 조금 낮추어 의상이 더욱 눈에 띄게 할 수 있습니다.")
@@ -413,14 +397,10 @@ def calculate_color_balance(image, person_bbox, face_bbox):
         feedbacks.append("의상과 배경의 채도 차이가 커서 색이 많이 강조됩니다. 이 경우 배경의 채도를 조금 낮추거나, 의상의 색감을 더 자연스럽게 만들어 조화를 이룰 수 있습니다.")
 
     # 명도 차이에 따른 점수 조정
-    if face_clothing_diff_pct < 5 or face_clothing_diff_pct > 15:
-        score -= 10
     if clothing_bg_diff_pct < 10 or clothing_bg_diff_pct > 30:
         score -= 10
         
     # 채도 차이에 따른 점수 조정
-    if face_clothing_saturation_diff_pct < 5 or face_clothing_saturation_diff_pct > 15:
-        score -= 10
     if clothing_bg_saturation_diff_pct < 5 or clothing_bg_saturation_diff_pct > 15:
         score -= 10
     

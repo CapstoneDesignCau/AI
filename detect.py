@@ -267,17 +267,17 @@ def calculate_exposure(image, person_bbox, face_bbox):
         print("배경의 노출이 적절합니다.")
         feedback_list.append("배경의 노출이 적절합니다.")
     
-        # 최종 점수와 피드백
-        score = max(0, score)
-        print(f"\n노출 점수: {score:.1f}")
-        
-        if score == 100:
-            final_feedback = "노출 분석\n전체적인 노출이 매우 적절합니다."
-            print("\n노출 피드백: 전체적인 노출이 매우 적절합니다")
-        else:
-            final_feedback = "노출 분석\n" + "\n".join(feedback_list[1:])  # 첫 번째 "노출 분석" 제외
-        
-        return score, final_feedback
+    # 최종 점수와 피드백
+    score = max(0, score)
+    print(f"\n노출 점수: {score:.1f}")
+    
+    if score == 100:
+        final_feedback = "노출 분석\n전체적인 노출이 매우 적절합니다."
+        print("\n노출 피드백: 전체적인 노출이 매우 적절합니다")
+    else:
+        final_feedback = "노출 분석\n" + "\n".join(feedback_list[1:])  # 첫 번째 "노출 분석" 제외
+    
+    return score, final_feedback
 
 def calculate_color_balance(image, person_bbox, face_bbox):
     """
@@ -384,6 +384,21 @@ def calculate_color_balance(image, person_bbox, face_bbox):
     elif clothing_bg_saturation_diff_pct > 15:
         feedbacks.append("의상과 배경의 채도 차이가 커서 색이 많이 강조됩니다. 이 경우 배경의 채도를 조금 낮추거나, 의상의 색감을 더 자연스럽게 만들어 조화를 이룰 수 있습니다.")
 
+    # 명도 차이에 따른 점수 조정
+    if face_clothing_diff_pct < 5 or face_clothing_diff_pct > 15:
+        score -= 10
+    if clothing_bg_diff_pct < 10 or clothing_bg_diff_pct > 30:
+        score -= 10
+        
+    # 채도 차이에 따른 점수 조정
+    if face_clothing_saturation_diff_pct < 5 or face_clothing_saturation_diff_pct > 15:
+        score -= 10
+    if clothing_bg_saturation_diff_pct < 5 or clothing_bg_saturation_diff_pct > 15:
+        score -= 10
+    
+    # 최소 점수 제한
+    score = max(60, score)
+
     # 피드백 결합
     if len(feedbacks) > 1:
         final_feedback = feedbacks[0] + "\n" + "\n".join([fb for fb in feedbacks[1:] if fb])  # 첫 번째 "명도 채도 분석" 유지
@@ -410,12 +425,12 @@ def combine_evaluation_results(measurements: dict, scores_and_feedbacks: list) -
     # 가중치 설정
     weights = {
         'ratio': 0.2,       # 등신 비율
-        'height': 0.2,     # 전신 비율
-        'composition': 0.2,  # 구도
-        'vertical': 0.1,   # 수직 위치
+        'height': 0.15,     # 전신 비율
+        'composition': 0.25,  # 구도
+        'vertical': 0.05,   # 수직 위치
         'focus': 0.1,      # 아웃포커싱
         'exposure': 0.1,        # 노출
-        'color_balance': 0.1  # 색상 균형
+        'color_balance': 0.15  # 색상 균형
     }
     
     # 점수 계산
